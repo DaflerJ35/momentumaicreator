@@ -7,13 +7,14 @@ import { Label } from '../../components/ui/label';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../../components/ui/tabs';
 import { Input } from '../../components/ui/input';
 import { Switch } from '../../components/ui/switch';
-import { Check, Copy, Upload, Brain, FileText, Sparkles, Loader2, Mic, MicOff, Bot, User, Send } from 'lucide-react';
-import { useToast } from '../../components/ui/use-toast';
+import { Check, Copy, Upload, Brain, FileText, Sparkles, Loader2, Mic, MicOff, Bot, User, Send, Trash2, Download, X } from 'lucide-react';
+import { toast } from 'sonner';
 import { useAI } from '../../lib/ai';
 import { useAuth } from '../../contexts/AuthContext';
 import VoiceCommand from '../../components/VoiceCommand';
 import { saveAs } from 'file-saver';
 import { v4 as uuidv4 } from 'uuid';
+import { aiAPI } from '../../lib/unifiedAPI';
 
 // Sample training data
 const SAMPLE_TRAINING_DATA = [
@@ -55,8 +56,6 @@ const CreatorHub = () => {
     voiceStyle: 'conversational'
   });
   
-  const { toast } = useToast();
-  const { generateContent } = useAI();
   const { currentUser } = useAuth();
   const messagesEndRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -70,7 +69,12 @@ const CreatorHub = () => {
   useEffect(() => {
     const savedData = localStorage.getItem('creatorHubTrainingData');
     if (savedData) {
-      setTrainingData(JSON.parse(savedData));
+      try {
+        const parsed = JSON.parse(savedData);
+        setTrainingData(parsed);
+      } catch (error) {
+        console.error('Error loading training data:', error);
+      }
     }
   }, []);
 
@@ -83,11 +87,7 @@ const CreatorHub = () => {
 
   const handleAddExample = () => {
     if (!newExample.trim()) {
-      toast({
-        title: 'Error',
-        description: 'Please enter some example content.',
-        variant: 'destructive',
-      });
+      toast.error('Please enter some example content.');
       return;
     }
 
@@ -105,10 +105,7 @@ const CreatorHub = () => {
     setNewExample('');
     setNewTags('');
     
-    toast({
-      title: 'Example added!',
-      description: 'Your writing example has been added to the training data.',
-    });
+    toast.success('Example added! Your writing example has been added to the training data.');
   };
 
   const handleFileUpload = (e) => {
@@ -116,11 +113,7 @@ const CreatorHub = () => {
     if (!file) return;
 
     if (file.type !== 'text/plain' && file.type !== 'application/json') {
-      toast({
-        title: 'Invalid file type',
-        description: 'Please upload a .txt or .json file.',
-        variant: 'destructive',
-      });
+      toast.error('Please upload a .txt or .json file.');
       return;
     }
 
@@ -157,52 +150,36 @@ const CreatorHub = () => {
 
         setTrainingData(prev => [...newItems, ...prev]);
         
-        toast({
-          title: 'Import successful',
-          description: `Added ${newItems.length} new examples to your training data.`,
-        });
+        toast.success(`Import successful! Added ${newItems.length} new examples to your training data.`);
       } catch (error) {
         console.error('Error processing file:', error);
-        toast({
-          title: 'Error processing file',
-          description: 'Please check the file format and try again.',
-          variant: 'destructive',
-        });
+        toast.error('Error processing file. Please check the file format and try again.');
       }
     };
 
-    if (file.type === 'application/json') {
-      reader.readAsText(file);
-    } else {
-      reader.readAsText(file);
-    }
+    reader.readAsText(file);
+    e.target.value = ''; // Reset file input
   };
 
   const handleDeleteExample = (id) => {
     setTrainingData(prev => prev.filter(item => item.id !== id));
-    toast({
-      title: 'Example removed',
-      description: 'The example has been removed from your training data.',
-    });
+    toast.success('Example removed from your training data.');
   };
 
   const trainModel = async () => {
     if (trainingData.length < 3) {
-      toast({
-        title: 'Not enough data',
-        description: 'Please add at least 3 examples before training.',
-        variant: 'destructive',
-      });
+      toast.error('Please add at least 3 examples before training.');
       return;
     }
 
     setIsTraining(true);
     setTrainingProgress(0);
+    setTrainingComplete(false);
 
     // Simulate training progress
     const interval = setInterval(() => {
       setTrainingProgress(prev => {
-        const newProgress = prev + Math.floor(Math.random() * 20) + 5;
+        const newProgress = prev + Math.floor(Math.random() * 15) + 5;
         if (newProgress >= 95) {
           clearInterval(interval);
           return 100;
@@ -219,22 +196,43 @@ const CreatorHub = () => {
       clearInterval(interval);
       setTrainingProgress(100);
       
-      toast({
-        title: 'Training complete!',
-        description: 'Your AI model has been trained with your writing style.',
-      });
-      
+      toast.success('Training complete! Your AI model has been trained with your writing style.');
       setTrainingComplete(true);
     } catch (error) {
       console.error('Training failed:', error);
-      toast({
-        title: 'Training failed',
-        description: 'There was an error training your model. Please try again.',
-        variant: 'destructive',
-      });
+      toast.error('There was an error training your model. Please try again.');
     } finally {
       setIsTraining(false);
     }
+  };
+
+  const buildSystemPrompt = () => {
+    const formalityLevel = modelSettings.formality > 0.7 ? 'Formal' : modelSettings.formality < 0.3 ? 'Casual' : 'Neutral';
+    const detailLevel = modelSettings.detail > 0.7 ? 'High' : modelSettings.detail < 0.3 ? 'Low' : 'Medium';
+    
+    const trainingExamples = trainingData.slice(0, 5).map(item => item.content).join('\n\n---\n\n');
+    
+    return `You are an AI writing assistant that helps users create content in their own unique voice and style.
+
+WRITING STYLE EXAMPLES:
+${trainingExamples}
+
+CURRENT SETTINGS:
+- Creativity Level: ${(modelSettings.creativity * 100).toFixed(0)}% ${modelSettings.creativity > 0.7 ? '(Creative)' : modelSettings.creativity < 0.4 ? '(Precise)' : '(Balanced)'}
+- Formality: ${formalityLevel}
+- Detail Level: ${detailLevel}
+- Voice Style: ${modelSettings.voiceStyle}
+- Use Personal Data: ${modelSettings.usePersonalData ? 'Yes' : 'No'}
+- Use Previous Context: ${modelSettings.usePreviousContent ? 'Yes' : 'No'}
+
+INSTRUCTIONS:
+- Match the user's writing style from the examples above
+- Maintain the tone, formality, and voice style specified
+- ${modelSettings.usePreviousContent ? 'Reference previous messages in the conversation for context' : 'Focus only on the current request'}
+- Be helpful, creative, and accurate
+- Generate content that feels natural and authentic to the user's style
+
+Respond naturally to the user's request while maintaining their unique writing style.`;
   };
 
   const handleSendMessage = async () => {
@@ -248,55 +246,53 @@ const CreatorHub = () => {
     };
 
     setConversation(prev => [...prev, userMessage]);
+    const currentMessage = message;
     setMessage('');
     setIsGenerating(true);
 
     try {
-      // Get the most recent messages for context
-      const recentMessages = conversation.slice(-4);
-      const messagesForAI = [
-        {
-          role: 'system',
-          content: `You are an AI writing assistant that helps users create content in their own voice. 
-          Use the following writing examples to match the user's style: 
-          ${trainingData.slice(0, 3).map(item => item.content).join('\n\n')}
-          
-          Current settings: 
-          - Creativity: ${modelSettings.creativity}
-          - Formality: modelSettings.formality > 0.7 ? 'Formal' : modelSettings.formality < 0.3 ? 'Casual' : 'Neutral'}
-          - Detail: modelSettings.detail > 0.7 ? 'High' : modelSettings.detail < 0.3 ? 'Low' : 'Medium'}
-          - Voice Style: ${modelSettings.voiceStyle}
-          
-          Respond naturally to the user's request while maintaining their style.`
-        },
-        ...recentMessages.map(msg => ({
-          role: msg.role === 'assistant' ? 'assistant' : 'user',
-          content: msg.content
-        })),
-        { role: 'user', content: message }
-      ];
+      // Build the prompt with context
+      const systemPrompt = buildSystemPrompt();
+      
+      // Get recent conversation context
+      const recentMessages = conversation.slice(-6);
+      const conversationContext = recentMessages
+        .map(msg => `${msg.role === 'user' ? 'User' : 'Assistant'}: ${msg.content}`)
+        .join('\n\n');
+      
+      const fullPrompt = `${systemPrompt}
 
-      const response = await generateContent({
-        messages: messagesForAI,
+${modelSettings.usePreviousContent && conversationContext ? `\nCONVERSATION HISTORY:\n${conversationContext}\n\n` : ''}USER REQUEST: ${currentMessage}
+
+Please respond in the user's writing style based on the examples and settings provided above.`;
+
+      const response = await aiAPI.generate(fullPrompt, {
         temperature: modelSettings.creativity,
-        maxTokens: 1000,
+        maxTokens: 2000,
+        model: 'pro'
       });
 
       const aiResponse = {
         id: Date.now() + 1,
         role: 'assistant',
-        content: response || 'I\'m not sure how to respond to that.',
+        content: response || 'I\'m not sure how to respond to that. Could you please rephrase your request?',
         timestamp: new Date().toISOString()
       };
 
       setConversation(prev => [...prev, aiResponse]);
     } catch (error) {
       console.error('Error generating response:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to generate response. Please try again.',
-        variant: 'destructive',
-      });
+      toast.error('Failed to generate response. Please try again.');
+      
+      const errorResponse = {
+        id: Date.now() + 1,
+        role: 'assistant',
+        content: 'I apologize, but I encountered an error while generating a response. Please try again or rephrase your request.',
+        timestamp: new Date().toISOString(),
+        error: true
+      };
+      
+      setConversation(prev => [...prev, errorResponse]);
     } finally {
       setIsGenerating(false);
     }
@@ -311,10 +307,7 @@ const CreatorHub = () => {
       setMessage('Help me draft content about ' + command);
     } else if (command.toLowerCase().includes('train') || command.toLowerCase().includes('teach')) {
       setActiveTab('train');
-      toast({
-        title: 'Ready to train',
-        description: 'You can now add examples to train me with your writing style.',
-      });
+      toast.success('Ready to train! You can now add examples to train me with your writing style.');
     } else {
       setMessage(command);
     }
@@ -328,74 +321,79 @@ const CreatorHub = () => {
     navigator.clipboard.writeText(text);
     setCopiedId(id);
     setTimeout(() => setCopiedId(null), 2000);
-    toast({
-      title: 'Copied!',
-      description: 'Content copied to clipboard.',
-    });
+    toast.success('Content copied to clipboard!');
   };
 
   const exportTrainingData = () => {
     const data = JSON.stringify(trainingData, null, 2);
     const blob = new Blob([data], { type: 'application/json' });
     saveAs(blob, `creator-hub-training-${new Date().toISOString().split('T')[0]}.json`);
+    toast.success('Training data exported successfully!');
   };
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      <div className="max-w-7xl mx-auto">
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-8">
-          <div className="mb-4 md:mb-0">
-            <h1 className="text-3xl font-bold bg-gradient-to-r from-purple-500 to-pink-500 bg-clip-text text-transparent">
-              Creator Hub
-            </h1>
-            <p className="text-slate-600 dark:text-slate-400">
-              Train your personal AI writing assistant
-            </p>
-          </div>
-          
-          <VoiceCommand onCommand={handleVoiceCommand} isActive={isListening} />
-        </div>
+    <div className="min-h-screen p-6 md:p-8 relative cosmic-bg">
+      {/* Background Effects */}
+      <div className="fixed inset-0 -z-10 overflow-hidden pointer-events-none">
+        <div className="galaxy-bg" />
+        <div className="stars-layer" />
+        <div className="nebula-glow w-96 h-96 bg-neon-violet top-20 left-10" />
+        <div className="nebula-glow w-80 h-80 bg-neon-magenta bottom-20 right-10" />
+      </div>
+
+      <div className="max-w-7xl mx-auto relative z-10">
+        <motion.div
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mb-8"
+        >
+          <h1 className="text-4xl font-bold gradient-text mb-2">Creator Hub</h1>
+          <p className="text-slate-400 text-lg">
+            Train your personal AI writing assistant to match your unique style
+          </p>
+        </motion.div>
 
         <Tabs 
           value={activeTab} 
           onValueChange={setActiveTab}
           className="w-full"
         >
-          <TabsList className="grid w-full grid-cols-3 mb-6">
-            <TabsTrigger value="brainstorm">
+          <TabsList className="grid w-full grid-cols-3 mb-6 glass-morphism border border-white/10">
+            <TabsTrigger value="brainstorm" className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-[hsl(200,100%,50%)] data-[state=active]:to-[hsl(280,85%,60%)] data-[state=active]:text-white">
               <Sparkles className="h-4 w-4 mr-2" />
               Brainstorm
             </TabsTrigger>
-            <TabsTrigger value="draft">
+            <TabsTrigger value="draft" className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-[hsl(200,100%,50%)] data-[state=active]:to-[hsl(280,85%,60%)] data-[state=active]:text-white">
               <FileText className="h-4 w-4 mr-2" />
               Draft Assistant
             </TabsTrigger>
-            <TabsTrigger value="train">
+            <TabsTrigger value="train" className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-[hsl(200,100%,50%)] data-[state=active]:to-[hsl(280,85%,60%)] data-[state=active]:text-white">
               <Brain className="h-4 w-4 mr-2" />
               Train AI
             </TabsTrigger>
           </TabsList>
 
           <TabsContent value="brainstorm" className="space-y-6">
-            <Card>
+            <Card className="glass-morphism border border-white/10">
               <CardHeader>
-                <CardTitle>Brainstorm with AI</CardTitle>
-                <CardDescription>
-                  Get creative ideas and outlines for your content.
+                <CardTitle className="text-white">Brainstorm with AI</CardTitle>
+                <CardDescription className="text-slate-400">
+                  Get creative ideas and outlines for your content
                 </CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-4">
+                  <div className="rounded-lg border border-slate-700/50 bg-slate-800/30 p-4">
                     <div className="space-y-4">
                       <div className="space-y-2">
-                        <Label htmlFor="brainstorm-topic">Topic or Theme</Label>
+                        <Label htmlFor="brainstorm-topic" className="text-slate-300">Topic or Theme</Label>
                         <Input
                           id="brainstorm-topic"
                           placeholder="e.g., sustainable living, AI in education, travel tips"
                           value={message}
                           onChange={(e) => setMessage(e.target.value)}
-                          onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
+                          onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleSendMessage()}
+                          className="bg-slate-800/50 border-slate-700 text-white placeholder:text-slate-500"
                         />
                       </div>
                       <div className="flex justify-between items-center">
@@ -404,21 +402,22 @@ const CreatorHub = () => {
                             variant="outline"
                             size="icon"
                             onClick={toggleListening}
-                            className={isListening ? 'bg-slate-100 dark:bg-slate-800' : ''}
+                            className={isListening ? 'bg-[hsl(200,100%,50%)]/20 border-[hsl(200,100%,50%)]/50' : 'border-slate-700'}
                           >
                             {isListening ? (
-                              <MicOff className="h-4 w-4" />
+                              <MicOff className="h-4 w-4 text-[hsl(200,100%,50%)]" />
                             ) : (
-                              <Mic className="h-4 w-4" />
+                              <Mic className="h-4 w-4 text-slate-400" />
                             )}
                           </Button>
-                          <span className="text-sm text-slate-500">
+                          <span className="text-sm text-slate-400">
                             {isListening ? 'Listening...' : 'Voice input'}
                           </span>
                         </div>
                         <Button 
                           onClick={handleSendMessage}
                           disabled={!message.trim() || isGenerating}
+                          className="bg-gradient-to-r from-[hsl(200,100%,50%)] to-[hsl(280,85%,60%)] hover:from-[hsl(280,85%,60%)] hover:to-[hsl(320,90%,55%)] text-white disabled:opacity-50"
                         >
                           {isGenerating ? (
                             <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -432,17 +431,17 @@ const CreatorHub = () => {
                   </div>
 
                   <div className="mt-6 space-y-4">
-                    <h3 className="font-medium">Your AI-Generated Ideas</h3>
+                    <h3 className="font-medium text-white">Your AI-Generated Ideas</h3>
                     <div className="space-y-4">
-                      {conversation.filter(msg => msg.role === 'assistant').length > 1 ? (
+                      {conversation.filter(msg => msg.role === 'assistant' && msg.id > 1).length > 0 ? (
                         conversation
                           .filter(msg => msg.role === 'assistant' && msg.id > 1)
                           .map((msg) => (
-                            <Card key={msg.id} className="relative group">
+                            <Card key={msg.id} className="relative group glass-morphism border border-white/10">
                               <CardContent className="p-4">
-                                <div className="prose dark:prose-invert max-w-none">
+                                <div className="prose prose-invert max-w-none text-slate-300">
                                   {msg.content.split('\n').map((paragraph, i) => (
-                                    <p key={i}>{paragraph}</p>
+                                    <p key={i} className="mb-2">{paragraph}</p>
                                   ))}
                                 </div>
                               </CardContent>
@@ -450,7 +449,7 @@ const CreatorHub = () => {
                                 <Button
                                   variant="ghost"
                                   size="icon"
-                                  className="h-8 w-8"
+                                  className="h-8 w-8 text-slate-400 hover:text-[hsl(200,100%,50%)]"
                                   onClick={() => copyToClipboard(msg.content, msg.id)}
                                   title="Copy to clipboard"
                                 >
@@ -464,10 +463,10 @@ const CreatorHub = () => {
                             </Card>
                           ))
                       ) : (
-                        <div className="text-center py-12 border-2 border-dashed rounded-lg border-slate-200 dark:border-slate-700">
+                        <div className="text-center py-12 border-2 border-dashed rounded-lg border-slate-700/50 bg-slate-800/30">
                           <Sparkles className="h-8 w-8 mx-auto mb-2 text-slate-400" />
-                          <p className="text-slate-500">Your AI-generated ideas will appear here</p>
-                          <p className="text-sm text-slate-400 mt-1">Try asking for blog topics, social media ideas, or content outlines</p>
+                          <p className="text-slate-400">Your AI-generated ideas will appear here</p>
+                          <p className="text-sm text-slate-500 mt-1">Try asking for blog topics, social media ideas, or content outlines</p>
                         </div>
                       )}
                     </div>
@@ -478,25 +477,26 @@ const CreatorHub = () => {
           </TabsContent>
 
           <TabsContent value="draft" className="space-y-6">
-            <Card>
+            <Card className="glass-morphism border border-white/10">
               <CardHeader>
-                <CardTitle>Draft Assistant</CardTitle>
-                <CardDescription>
-                  Get help writing and refining your content in your unique voice.
+                <CardTitle className="text-white">Draft Assistant</CardTitle>
+                <CardDescription className="text-slate-400">
+                  Get help writing and refining your content in your unique voice
                 </CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-4">
+                  <div className="rounded-lg border border-slate-700/50 bg-slate-800/30 p-4">
                     <div className="space-y-4">
                       <div className="space-y-2">
-                        <Label htmlFor="draft-prompt">What would you like to write about?</Label>
+                        <Label htmlFor="draft-prompt" className="text-slate-300">What would you like to write about?</Label>
                         <Textarea
                           id="draft-prompt"
                           placeholder="e.g., A blog post about the benefits of meditation, A tweet thread about AI ethics, An email to my team about the new project..."
                           rows={3}
                           value={message}
                           onChange={(e) => setMessage(e.target.value)}
+                          className="bg-slate-800/50 border-slate-700 text-white placeholder:text-slate-500"
                         />
                       </div>
                       <div className="flex justify-between items-center">
@@ -505,21 +505,22 @@ const CreatorHub = () => {
                             variant="outline"
                             size="icon"
                             onClick={toggleListening}
-                            className={isListening ? 'bg-slate-100 dark:bg-slate-800' : ''}
+                            className={isListening ? 'bg-[hsl(200,100%,50%)]/20 border-[hsl(200,100%,50%)]/50' : 'border-slate-700'}
                           >
                             {isListening ? (
-                              <MicOff className="h-4 w-4" />
+                              <MicOff className="h-4 w-4 text-[hsl(200,100%,50%)]" />
                             ) : (
-                              <Mic className="h-4 w-4" />
+                              <Mic className="h-4 w-4 text-slate-400" />
                             )}
                           </Button>
-                          <span className="text-sm text-slate-500">
+                          <span className="text-sm text-slate-400">
                             {isListening ? 'Listening...' : 'Voice input'}
                           </span>
                         </div>
                         <Button 
                           onClick={handleSendMessage}
                           disabled={!message.trim() || isGenerating}
+                          className="bg-gradient-to-r from-[hsl(200,100%,50%)] to-[hsl(280,85%,60%)] hover:from-[hsl(280,85%,60%)] hover:to-[hsl(320,90%,55%)] text-white disabled:opacity-50"
                         >
                           {isGenerating ? (
                             <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -533,8 +534,8 @@ const CreatorHub = () => {
                   </div>
 
                   <div className="mt-6 space-y-4">
-                    <h3 className="font-medium">Your Drafts</h3>
-                    <div className="space-y-4">
+                    <h3 className="font-medium text-white">Your Conversation</h3>
+                    <div className="space-y-4 max-h-[600px] overflow-y-auto pr-2">
                       {conversation.length > 1 ? (
                         <div className="space-y-4">
                           {conversation.map((msg) => (
@@ -545,15 +546,15 @@ const CreatorHub = () => {
                               <div 
                                 className={`max-w-3xl rounded-lg p-4 ${
                                   msg.role === 'user' 
-                                    ? 'bg-blue-500 text-white' 
-                                    : 'bg-slate-100 dark:bg-slate-800'
+                                    ? 'bg-gradient-to-r from-[hsl(200,100%,50%)]/20 to-[hsl(280,85%,60%)]/20 border border-[hsl(200,100%,50%)]/30 text-white' 
+                                    : 'glass-morphism border border-white/10 text-slate-300'
                                 }`}
                               >
                                 <div className="flex items-center mb-1">
                                   {msg.role === 'assistant' ? (
-                                    <Bot className="h-4 w-4 mr-2 text-slate-500" />
+                                    <Bot className="h-4 w-4 mr-2 text-[hsl(200,100%,50%)]" />
                                   ) : (
-                                    <User className="h-4 w-4 mr-2 text-blue-200" />
+                                    <User className="h-4 w-4 mr-2 text-[hsl(280,85%,60%)]" />
                                   )}
                                   <span className="text-xs font-medium">
                                     {msg.role === 'assistant' ? 'AI Assistant' : 'You'}
@@ -562,9 +563,9 @@ const CreatorHub = () => {
                                     {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                   </span>
                                 </div>
-                                <div className="prose dark:prose-invert max-w-none">
+                                <div className="prose prose-invert max-w-none">
                                   {msg.content.split('\n').map((paragraph, i) => (
-                                    <p key={i}>{paragraph}</p>
+                                    <p key={i} className="mb-2">{paragraph}</p>
                                   ))}
                                 </div>
                                 {msg.role === 'assistant' && (
@@ -572,7 +573,7 @@ const CreatorHub = () => {
                                     <Button
                                       variant="ghost"
                                       size="icon"
-                                      className="h-6 w-6 text-slate-500 hover:text-slate-900 dark:hover:text-white"
+                                      className="h-6 w-6 text-slate-400 hover:text-[hsl(200,100%,50%)]"
                                       onClick={() => copyToClipboard(msg.content, msg.id)}
                                       title="Copy to clipboard"
                                     >
@@ -590,28 +591,29 @@ const CreatorHub = () => {
                           <div ref={messagesEndRef} />
                         </div>
                       ) : (
-                        <div className="text-center py-12 border-2 border-dashed rounded-lg border-slate-200 dark:border-slate-700">
+                        <div className="text-center py-12 border-2 border-dashed rounded-lg border-slate-700/50 bg-slate-800/30">
                           <FileText className="h-8 w-8 mx-auto mb-2 text-slate-400" />
-                          <p className="text-slate-500">Your draft content will appear here</p>
-                          <p className="text-sm text-slate-400 mt-1">Ask me to help you write, edit, or refine your content</p>
+                          <p className="text-slate-400">Your draft content will appear here</p>
+                          <p className="text-sm text-slate-500 mt-1">Ask me to help you write, edit, or refine your content</p>
                         </div>
                       )}
                     </div>
                   </div>
                 </div>
               </CardContent>
-              <CardFooter className="border-t border-slate-200 dark:border-slate-700 p-4">
+              <CardFooter className="border-t border-slate-700/50 p-4 bg-slate-800/30">
                 <div className="flex w-full items-center space-x-2">
                   <Input
                     placeholder="Type your message..."
                     value={message}
                     onChange={(e) => setMessage(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
-                    className="flex-1"
+                    onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleSendMessage()}
+                    className="flex-1 bg-slate-800/50 border-slate-700 text-white placeholder:text-slate-500"
                   />
                   <Button 
                     onClick={handleSendMessage}
                     disabled={!message.trim() || isGenerating}
+                    className="bg-gradient-to-r from-[hsl(200,100%,50%)] to-[hsl(280,85%,60%)] hover:from-[hsl(280,85%,60%)] hover:to-[hsl(320,90%,55%)] text-white disabled:opacity-50"
                   >
                     {isGenerating ? (
                       <Loader2 className="h-4 w-4 animate-spin" />
@@ -625,42 +627,42 @@ const CreatorHub = () => {
           </TabsContent>
 
           <TabsContent value="train" className="space-y-6">
-            <Card>
+            <Card className="glass-morphism border border-white/10">
               <CardHeader>
-                <CardTitle>Train Your AI</CardTitle>
-                <CardDescription>
-                  Teach me your writing style by providing examples of your content.
+                <CardTitle className="text-white">Train Your AI</CardTitle>
+                <CardDescription className="text-slate-400">
+                  Teach me your writing style by providing examples of your content
                 </CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="space-y-6">
                   <div className="space-y-4">
                     <div>
-                      <Label htmlFor="new-example">Add a writing example</Label>
+                      <Label htmlFor="new-example" className="text-slate-300">Add a writing example</Label>
                       <Textarea
                         id="new-example"
                         placeholder="Paste or type an example of your writing..."
                         rows={4}
                         value={newExample}
                         onChange={(e) => setNewExample(e.target.value)}
-                        className="mt-1"
+                        className="mt-1 bg-slate-800/50 border-slate-700 text-white placeholder:text-slate-500"
                       />
                     </div>
                     <div>
-                      <Label htmlFor="tags">Tags (optional, comma-separated)</Label>
+                      <Label htmlFor="tags" className="text-slate-300">Tags (optional, comma-separated)</Label>
                       <Input
                         id="tags"
                         placeholder="e.g., blog, professional, casual, email"
                         value={newTags}
                         onChange={(e) => setNewTags(e.target.value)}
-                        className="mt-1"
+                        className="mt-1 bg-slate-800/50 border-slate-700 text-white placeholder:text-slate-500"
                       />
                     </div>
                     <div className="flex flex-col sm:flex-row gap-2">
                       <Button 
                         onClick={handleAddExample}
                         disabled={!newExample.trim()}
-                        className="flex-1"
+                        className="flex-1 bg-gradient-to-r from-[hsl(200,100%,50%)] to-[hsl(280,85%,60%)] hover:from-[hsl(280,85%,60%)] hover:to-[hsl(320,90%,55%)] text-white disabled:opacity-50"
                       >
                         <FileText className="h-4 w-4 mr-2" />
                         Add Example
@@ -668,7 +670,7 @@ const CreatorHub = () => {
                       <Button 
                         variant="outline" 
                         onClick={() => fileInputRef.current?.click()}
-                        className="flex-1"
+                        className="flex-1 border-slate-700 text-slate-300 hover:bg-slate-800/50"
                       >
                         <Upload className="h-4 w-4 mr-2" />
                         Import from File
@@ -683,15 +685,16 @@ const CreatorHub = () => {
                     </div>
                   </div>
 
-                  <div className="border-t border-slate-200 dark:border-slate-700 pt-4">
+                  <div className="border-t border-slate-700/50 pt-4">
                     <div className="flex justify-between items-center mb-4">
-                      <h3 className="font-medium">Your Training Data</h3>
+                      <h3 className="font-medium text-white">Your Training Data ({trainingData.length} examples)</h3>
                       <div className="flex items-center space-x-2">
                         <Button 
                           variant="outline" 
                           size="sm" 
                           onClick={exportTrainingData}
                           disabled={trainingData.length === 0}
+                          className="border-slate-700 text-slate-300 hover:bg-slate-800/50 disabled:opacity-50"
                         >
                           <Download className="h-4 w-4 mr-2" />
                           Export Data
@@ -699,7 +702,7 @@ const CreatorHub = () => {
                         <Button 
                           onClick={trainModel}
                           disabled={isTraining || trainingData.length < 3}
-                          className="bg-gradient-to-r from-purple-500 to-pink-500 text-white hover:from-purple-600 hover:to-pink-600"
+                          className="bg-gradient-to-r from-[hsl(200,100%,50%)] to-[hsl(280,85%,60%)] hover:from-[hsl(280,85%,60%)] hover:to-[hsl(320,90%,55%)] text-white disabled:opacity-50"
                         >
                           {isTraining ? (
                             <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -713,27 +716,27 @@ const CreatorHub = () => {
 
                     {isTraining && (
                       <div className="mb-4 space-y-2">
-                        <div className="flex justify-between text-sm">
+                        <div className="flex justify-between text-sm text-slate-300">
                           <span>Training in progress...</span>
                           <span>{trainingProgress}%</span>
                         </div>
-                        <div className="h-2 w-full bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                        <div className="h-2 w-full bg-slate-700/50 rounded-full overflow-hidden">
                           <div 
-                            className="h-full bg-gradient-to-r from-purple-500 to-pink-500 transition-all duration-300"
+                            className="h-full bg-gradient-to-r from-[hsl(200,100%,50%)] to-[hsl(280,85%,60%)] transition-all duration-300"
                             style={{ width: `${trainingProgress}%` }}
                           />
                         </div>
-                        <p className="text-xs text-slate-500">
+                        <p className="text-xs text-slate-400">
                           This may take a few moments. You can continue using other features.
                         </p>
                       </div>
                     )}
 
                     {trainingComplete && (
-                      <div className="mb-4 p-4 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-md">
+                      <div className="mb-4 p-4 bg-emerald-500/10 border border-emerald-500/50 rounded-md">
                         <div className="flex items-center">
-                          <Check className="h-5 w-5 text-emerald-500 mr-2" />
-                          <p className="text-emerald-800 dark:text-emerald-200 font-medium">
+                          <Check className="h-5 w-5 text-emerald-400 mr-2" />
+                          <p className="text-emerald-300 font-medium">
                             Training complete! Your AI model has been updated with your writing style.
                           </p>
                         </div>
@@ -745,9 +748,9 @@ const CreatorHub = () => {
                         {trainingData.map((item) => (
                           <div 
                             key={item.id}
-                            className="group relative p-4 border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/50"
+                            className="group relative p-4 border border-slate-700/50 rounded-lg hover:bg-slate-800/50 bg-slate-800/30 transition-colors"
                           >
-                            <div className="prose dark:prose-invert max-w-none text-sm">
+                            <div className="prose prose-invert max-w-none text-sm text-slate-300">
                               {item.content.length > 200 
                                 ? `${item.content.substring(0, 200)}...` 
                                 : item.content}
@@ -756,17 +759,17 @@ const CreatorHub = () => {
                               {item.tags?.map((tag, i) => (
                                 <span 
                                   key={i}
-                                  className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300"
+                                  className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-slate-700/50 text-slate-300"
                                 >
                                   {tag}
                                 </span>
                               ))}
                             </div>
-                            <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
                               <Button
                                 variant="ghost"
                                 size="icon"
-                                className="h-8 w-8 text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                                className="h-8 w-8 text-slate-400 hover:text-[hsl(200,100%,50%)]"
                                 onClick={() => copyToClipboard(item.content, item.id)}
                                 title="Copy to clipboard"
                               >
@@ -779,24 +782,21 @@ const CreatorHub = () => {
                               <Button
                                 variant="ghost"
                                 size="icon"
-                                className="h-8 w-8 text-slate-400 hover:text-red-500"
+                                className="h-8 w-8 text-slate-400 hover:text-red-400"
                                 onClick={() => handleDeleteExample(item.id)}
                                 title="Delete example"
                               >
-                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                  <path d="M3 6h18"></path>
-                                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-                                </svg>
+                                <Trash2 className="h-4 w-4" />
                               </Button>
                             </div>
                           </div>
                         ))}
                       </div>
                     ) : (
-                      <div className="text-center py-12 border-2 border-dashed rounded-lg border-slate-200 dark:border-slate-700">
+                      <div className="text-center py-12 border-2 border-dashed rounded-lg border-slate-700/50 bg-slate-800/30">
                         <Upload className="h-8 w-8 mx-auto mb-2 text-slate-400" />
-                        <p className="text-slate-500">No training examples yet</p>
-                        <p className="text-sm text-slate-400 mt-1">Add examples of your writing to train the AI</p>
+                        <p className="text-slate-400">No training examples yet</p>
+                        <p className="text-sm text-slate-500 mt-1">Add examples of your writing to train the AI</p>
                       </div>
                     )}
                   </div>
@@ -804,19 +804,19 @@ const CreatorHub = () => {
               </CardContent>
             </Card>
 
-            <Card>
+            <Card className="glass-morphism border border-white/10">
               <CardHeader>
-                <CardTitle>AI Model Settings</CardTitle>
-                <CardDescription>
-                  Customize how your AI assistant generates content.
+                <CardTitle className="text-white">AI Model Settings</CardTitle>
+                <CardDescription className="text-slate-400">
+                  Customize how your AI assistant generates content
                 </CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="space-y-6">
                   <div>
                     <div className="flex items-center justify-between mb-2">
-                      <Label htmlFor="creativity">Creativity</Label>
-                      <span className="text-sm text-slate-500">
+                      <Label htmlFor="creativity" className="text-slate-300">Creativity</Label>
+                      <span className="text-sm text-slate-400">
                         {modelSettings.creativity < 0.4 ? 'Precise' : 
                          modelSettings.creativity < 0.7 ? 'Balanced' : 'Creative'}
                       </span>
@@ -832,7 +832,7 @@ const CreatorHub = () => {
                         ...prev,
                         creativity: parseFloat(e.target.value)
                       }))}
-                      className="w-full h-2 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer"
+                      className="w-full h-2 bg-slate-700/50 rounded-lg appearance-none cursor-pointer accent-[hsl(200,100%,50%)]"
                     />
                     <div className="flex justify-between text-xs text-slate-500 mt-1">
                       <span>More Factual</span>
@@ -842,8 +842,8 @@ const CreatorHub = () => {
 
                   <div>
                     <div className="flex items-center justify-between mb-2">
-                      <Label htmlFor="formality">Formality</Label>
-                      <span className="text-sm text-slate-500">
+                      <Label htmlFor="formality" className="text-slate-300">Formality</Label>
+                      <span className="text-sm text-slate-400">
                         {modelSettings.formality < 0.4 ? 'Casual' : 
                          modelSettings.formality < 0.7 ? 'Neutral' : 'Formal'}
                       </span>
@@ -859,7 +859,7 @@ const CreatorHub = () => {
                         ...prev,
                         formality: parseFloat(e.target.value)
                       }))}
-                      className="w-full h-2 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer"
+                      className="w-full h-2 bg-slate-700/50 rounded-lg appearance-none cursor-pointer accent-[hsl(280,85%,60%)]"
                     />
                     <div className="flex justify-between text-xs text-slate-500 mt-1">
                       <span>Casual</span>
@@ -869,8 +869,8 @@ const CreatorHub = () => {
 
                   <div>
                     <div className="flex items-center justify-between mb-2">
-                      <Label htmlFor="detail">Detail Level</Label>
-                      <span className="text-sm text-slate-500">
+                      <Label htmlFor="detail" className="text-slate-300">Detail Level</Label>
+                      <span className="text-sm text-slate-400">
                         {modelSettings.detail < 0.4 ? 'Concise' : 
                          modelSettings.detail < 0.7 ? 'Moderate' : 'Detailed'}
                       </span>
@@ -886,7 +886,7 @@ const CreatorHub = () => {
                         ...prev,
                         detail: parseFloat(e.target.value)
                       }))}
-                      className="w-full h-2 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer"
+                      className="w-full h-2 bg-slate-700/50 rounded-lg appearance-none cursor-pointer accent-[hsl(320,90%,55%)]"
                     />
                     <div className="flex justify-between text-xs text-slate-500 mt-1">
                       <span>Brief</span>
@@ -897,8 +897,8 @@ const CreatorHub = () => {
                   <div className="space-y-4">
                     <div className="flex items-center justify-between">
                       <div>
-                        <Label htmlFor="use-personal-data">Use Personal Data</Label>
-                        <p className="text-xs text-slate-500">
+                        <Label htmlFor="use-personal-data" className="text-slate-300">Use Personal Data</Label>
+                        <p className="text-xs text-slate-400">
                           Allow the AI to reference your previous content
                         </p>
                       </div>
@@ -914,8 +914,8 @@ const CreatorHub = () => {
 
                     <div className="flex items-center justify-between">
                       <div>
-                        <Label htmlFor="use-previous-content">Use Previous Context</Label>
-                        <p className="text-xs text-slate-500">
+                        <Label htmlFor="use-previous-content" className="text-slate-300">Use Previous Context</Label>
+                        <p className="text-xs text-slate-400">
                           Reference previous messages in the conversation
                         </p>
                       </div>
@@ -931,7 +931,7 @@ const CreatorHub = () => {
                   </div>
 
                   <div>
-                    <Label htmlFor="voice-style">Voice Style</Label>
+                    <Label htmlFor="voice-style" className="text-slate-300">Voice Style</Label>
                     <select
                       id="voice-style"
                       value={modelSettings.voiceStyle}
@@ -939,7 +939,7 @@ const CreatorHub = () => {
                         ...prev,
                         voiceStyle: e.target.value
                       }))}
-                      className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent sm:text-sm rounded-md bg-white dark:bg-slate-800"
+                      className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-slate-700 focus:outline-none focus:ring-2 focus:ring-[hsl(200,100%,50%)] focus:border-transparent sm:text-sm rounded-md bg-slate-800/50 text-white"
                     >
                       <option value="conversational">Conversational</option>
                       <option value="professional">Professional</option>
@@ -955,6 +955,14 @@ const CreatorHub = () => {
           </TabsContent>
         </Tabs>
       </div>
+
+      {isListening && (
+        <VoiceCommand 
+          onCommand={handleVoiceCommand} 
+          isActive={isListening}
+          onClose={() => setIsListening(false)}
+        />
+      )}
     </div>
   );
 };

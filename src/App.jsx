@@ -1,5 +1,6 @@
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { Suspense, useState, useEffect } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth } from './lib/firebase';
 import { routes } from './config/routes';
@@ -7,18 +8,35 @@ import Navbar from './components/Navbar';
 import Sidebar from './components/Sidebar';
 import AuthModal from './components/auth/AuthModal';
 import AnimatedBackground from './components/AnimatedBackground';
+import ParticleBackground from './components/animations/ParticleBackground';
 import NotFound from './pages/NotFound';
 import { Toaster } from 'sonner';
+import { LoadingSpinner } from './components/ui/LoadingSpinner';
 
-// Premium loading spinner component
-const LoadingSpinner = () => (
-  <div className="flex items-center justify-center min-h-screen relative z-20">
-    <div className="relative">
-      <div className="animate-spin rounded-full h-16 w-16 border-4 border-emerald-500/20 border-t-emerald-500 border-r-cyan-500"></div>
-      <div className="absolute inset-0 animate-pulse rounded-full bg-emerald-500/20 blur-xl"></div>
-    </div>
-  </div>
-);
+// Page transition variants
+const pageVariants = {
+  initial: {
+    opacity: 0,
+    y: 20,
+    scale: 0.98,
+  },
+  in: {
+    opacity: 1,
+    y: 0,
+    scale: 1,
+  },
+  out: {
+    opacity: 0,
+    y: -20,
+    scale: 1.02,
+  },
+};
+
+const pageTransition = {
+  type: 'tween',
+  ease: 'anticipate',
+  duration: 0.4,
+};
 
 function AppContent() {
   const [user, setUser] = useState(null);
@@ -78,6 +96,7 @@ function AppContent() {
   const AppShell = ({ children }) => (
     <div className="flex h-screen relative overflow-hidden">
       <AnimatedBackground />
+      <ParticleBackground particleCount={30} />
       <Sidebar 
         user={user} 
         isOpen={sidebarOpen} 
@@ -91,9 +110,24 @@ function AppContent() {
           onMenuToggle={() => setSidebarOpen(!sidebarOpen)}
         />
         <main className="flex-1 overflow-y-auto p-6 relative">
-          <Suspense fallback={<LoadingSpinner />}>
-            {children}
-          </Suspense>
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={location.pathname}
+              initial="initial"
+              animate="in"
+              exit="out"
+              variants={pageVariants}
+              transition={pageTransition}
+            >
+              <Suspense fallback={
+                <div className="flex items-center justify-center min-h-[60vh]">
+                  <LoadingSpinner size="xl" />
+                </div>
+              }>
+                {children}
+              </Suspense>
+            </motion.div>
+          </AnimatePresence>
         </main>
       </div>
     </div>
@@ -101,44 +135,65 @@ function AppContent() {
 
   return (
     <div className="app-container relative">
-      {!isPublicRoute && <AnimatedBackground />}
+      {!isPublicRoute && (
+        <>
+          <AnimatedBackground />
+          <ParticleBackground particleCount={30} />
+        </>
+      )}
       {isPublicRoute ? (
         // Public routes without the app shell
-        <div className="relative z-10">
-          <Routes>
-            {publicRoutes.map((route) => (
-              <Route
-                key={route.path}
-                path={route.path}
-                element={
-                  <Suspense fallback={<LoadingSpinner />}>
-                    <route.element />
-                  </Suspense>
-                }
-              />
-            ))}
-            {/* Catch-all for public routes */}
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-        </div>
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={location.pathname}
+            initial="initial"
+            animate="in"
+            exit="out"
+            variants={pageVariants}
+            transition={pageTransition}
+            className="relative z-10"
+          >
+            <Routes location={location}>
+              {publicRoutes.map((route) => (
+                <Route
+                  key={route.path}
+                  path={route.path}
+                  element={
+                    <Suspense fallback={
+                      <div className="flex items-center justify-center min-h-screen">
+                        <LoadingSpinner size="xl" />
+                      </div>
+                    }>
+                      <route.element />
+                    </Suspense>
+                  }
+                />
+              ))}
+              {/* Catch-all for public routes */}
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </motion.div>
+        </AnimatePresence>
       ) : (
         // Protected routes with app shell
         <AppShell>
-          <Routes>
-            {protectedRoutes.map((route) => (
-              <Route
-                key={route.path}
-                path={route.path}
-                element={
-                  <ProtectedRoute user={user}>
-                    <route.element />
-                  </ProtectedRoute>
-                }
-              />
-            ))}
-            {/* Catch-all for protected routes */}
-            <Route path="*" element={<Navigate to="/dashboard" replace />} />
-          </Routes>
+          <AnimatePresence mode="wait">
+            <Routes location={location}>
+              {protectedRoutes.map((route) => (
+                <Route
+                  key={route.path}
+                  path={route.path}
+                  element={
+                    <ProtectedRoute user={user}>
+                      <route.element />
+                    </ProtectedRoute>
+                  }
+                />
+              ))}
+              {/* Catch-all for protected routes */}
+              <Route path="*" element={<Navigate to="/dashboard" replace />} />
+            </Routes>
+          </AnimatePresence>
         </AppShell>
       )}
       
