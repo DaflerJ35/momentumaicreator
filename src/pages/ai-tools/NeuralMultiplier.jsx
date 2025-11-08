@@ -37,7 +37,7 @@ import VoiceCommand from '../../components/VoiceCommand';
 import { saveAs } from 'file-saver';
 import { exportToPdf, exportToDocx, exportToTxt, exportToJson, exportToHtml } from '../../lib/exportUtils';
 import { sanitizeWithFormatting } from '../../utils/sanitize';
-import { debounce, throttle } from 'lodash';
+import { debounce, throttle } from 'lodash-es';
 import { v4 as uuidv4 } from 'uuid';
 
 // Content templates for different use cases
