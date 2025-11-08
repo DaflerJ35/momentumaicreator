@@ -1,0 +1,21 @@
+# ZAP Scanning Rules
+# Format: <id> <action> <description>
+# Actions: IGNORE, INFO, WARN, FAIL
+
+# Ignore false positives
+10026	IGNORE	(Persistent XSS)
+10027	IGNORE	(Information Disclosure - Suspicious Comments)
+
+# Informational
+10015	INFO	(Re-examine Cache-control Directives)
+10017	INFO	(Cross-Domain JavaScript Source File Inclusion)
+
+# Warnings
+10021	WARN	(X-Content-Type-Options Header Missing)
+10023	WARN	(Information Disclosure - Debug Error Messages)
+
+# Failures (stop build)
+40012	FAIL	(Cross Site Scripting (Reflected))
+40014	FAIL	(Cross Site Scripting (Persistent))
+90001	FAIL	(Insecure HTTP Method)
+

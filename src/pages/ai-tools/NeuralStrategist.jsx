@@ -19,13 +19,60 @@ import {
   Zap, 
   FileText, 
   Share2,
-  Download
+  Download,
+  TrendingUp,
+  BarChart3,
+  Link2
 } from 'lucide-react';
 import { useAI } from '../../contexts/AIContext';
 import { toast } from 'sonner';
 import VoiceCommand from '../../components/VoiceCommand';
 import { sanitizeWithFormatting } from '../../utils/sanitize';
 import { exportToPdf, exportToDocx, exportToTxt, exportToJson, exportToHtml } from '../../lib/exportUtils';
+
+// Industry-specific templates for quick start
+const INDUSTRY_TEMPLATES = {
+  'Technology': {
+    focus: 'SaaS growth, product launches, developer community',
+    commonGoals: ['User acquisition', 'Product adoption', 'Community building', 'API integrations'],
+    keyMetrics: ['MRR growth', 'User activation rate', 'NPS score', 'API usage']
+  },
+  'E-commerce': {
+    focus: 'Conversion optimization, customer retention, seasonal campaigns',
+    commonGoals: ['Increase sales', 'Reduce cart abandonment', 'Customer lifetime value', 'Brand awareness'],
+    keyMetrics: ['Conversion rate', 'AOV', 'Customer retention', 'Traffic growth']
+  },
+  'Healthcare': {
+    focus: 'Patient education, trust building, compliance',
+    commonGoals: ['Patient engagement', 'Brand trust', 'Appointment bookings', 'Health education'],
+    keyMetrics: ['Patient acquisition', 'Appointment rate', 'Patient satisfaction', 'Content engagement']
+  },
+  'Finance': {
+    focus: 'Trust building, education, regulatory compliance',
+    commonGoals: ['Customer acquisition', 'Financial literacy', 'Trust building', 'Product adoption'],
+    keyMetrics: ['Sign-up rate', 'Account activation', 'AUM growth', 'Customer satisfaction']
+  },
+  'Education': {
+    focus: 'Student engagement, course enrollment, community building',
+    commonGoals: ['Course enrollment', 'Student retention', 'Community growth', 'Brand awareness'],
+    keyMetrics: ['Enrollment rate', 'Completion rate', 'Student satisfaction', 'Referral rate']
+  },
+  'Real Estate': {
+    focus: 'Lead generation, property showcasing, agent branding',
+    commonGoals: ['Lead generation', 'Property views', 'Agent branding', 'Client engagement'],
+    keyMetrics: ['Lead quality', 'View-to-inquiry rate', 'Closing rate', 'Referral rate']
+  },
+  'Fitness & Wellness': {
+    focus: 'Community building, transformation stories, engagement',
+    commonGoals: ['Member acquisition', 'Retention', 'Community engagement', 'Program enrollment'],
+    keyMetrics: ['Member growth', 'Retention rate', 'Class attendance', 'Social engagement']
+  },
+  'Food & Beverage': {
+    focus: 'Brand storytelling, seasonal promotions, customer loyalty',
+    commonGoals: ['Brand awareness', 'Customer loyalty', 'Seasonal sales', 'Social engagement'],
+    keyMetrics: ['Foot traffic', 'Repeat visits', 'Social engagement', 'Revenue growth']
+  }
+};
 
 const STRATEGY_SCHEMA = {
   type: 'object',
@@ -84,6 +131,25 @@ const STRATEGY_SCHEMA = {
         team: { type: 'array', items: { type: 'string' } },
         budget: { type: 'string' }
       }
+    },
+    competitiveAnalysis: {
+      type: 'object',
+      properties: {
+        competitors: { type: 'array', items: { type: 'string' } },
+        competitiveAdvantages: { type: 'array', items: { type: 'string' } },
+        marketOpportunities: { type: 'array', items: { type: 'string' } },
+        differentiationStrategy: { type: 'string' }
+      }
+    },
+    roiProjection: {
+      type: 'object',
+      properties: {
+        estimatedInvestment: { type: 'string' },
+        expectedReturn: { type: 'string' },
+        roiPercentage: { type: 'string' },
+        paybackPeriod: { type: 'string' },
+        keyAssumptions: { type: 'array', items: { type: 'string' } }
+      }
     }
   },
   required: ['name', 'summary', 'objectives', 'timeline']
@@ -115,6 +181,8 @@ const NeuralStrategist = () => {
   const [voiceCommand, setVoiceCommand] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamedText, setStreamedText] = useState('');
+  const [shareableLink, setShareableLink] = useState('');
+  const [showIndustryTemplates, setShowIndustryTemplates] = useState(false);
   const streamContainerRef = useRef(null);
 
   const generateStrategy = useCallback(async (userGoal = goal, userIndustry = industry, userAudience = audience) => {
@@ -129,14 +197,35 @@ const NeuralStrategist = () => {
     setIsStreaming(true);
 
     try {
-      // Create a more detailed prompt
-      const prompt = `Create a detailed strategy with the following parameters:
+      // Get industry-specific context if available
+      const industryContext = userIndustry && INDUSTRY_TEMPLATES[userIndustry] 
+        ? `Industry Context for ${userIndustry}:
+        - Focus Areas: ${INDUSTRY_TEMPLATES[userIndustry].focus}
+        - Common Goals: ${INDUSTRY_TEMPLATES[userIndustry].commonGoals.join(', ')}
+        - Key Metrics: ${INDUSTRY_TEMPLATES[userIndustry].keyMetrics.join(', ')}
+        `
+        : '';
+
+      // Create a more detailed prompt with competitive analysis and ROI
+      const prompt = `Create a detailed, comprehensive business strategy with the following parameters:
       - Goal: ${userGoal}
       - Industry: ${userIndustry || 'Not specified'}
       - Target Audience: ${userAudience || 'General audience'}
       - Timeline: ${timeline}
       
-      Please generate a comprehensive strategy including objectives, target audience analysis, timeline, KPIs, risks, and required resources.`;
+      ${industryContext}
+      
+      Please generate a comprehensive strategy including:
+      1. Clear objectives and summary
+      2. Detailed target audience analysis (pain points, goals)
+      3. Week-by-week timeline with tasks and success metrics
+      4. Key Performance Indicators (primary and secondary)
+      5. Risk assessment with likelihood, impact, and mitigation strategies
+      6. Required resources (tools, team, budget)
+      7. Competitive analysis: identify main competitors, competitive advantages, market opportunities, and differentiation strategy
+      8. ROI Projection: estimate investment, expected return, ROI percentage, payback period, and key assumptions
+      
+      Make this strategy actionable, data-driven, and focused on measurable results.`;
 
       // First get the structured data
       const structuredData = await generateStructuredContent(
@@ -150,6 +239,11 @@ const NeuralStrategist = () => {
 
       setStrategy(structuredData);
       setActiveTab('strategy');
+      
+      // Generate shareable link (store strategy in sessionStorage with unique ID)
+      const strategyId = `strategy_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      sessionStorage.setItem(strategyId, JSON.stringify(structuredData));
+      setShareableLink(`${window.location.origin}${window.location.pathname}?strategy=${strategyId}`);
       
       // Then stream a human-readable version
       const streamPrompt = `Convert this JSON strategy into a well-formatted, human-readable markdown document:
@@ -253,6 +347,33 @@ const NeuralStrategist = () => {
     } catch (err) {
       console.error('Failed to copy to clipboard:', err);
       toast.error('Failed to copy to clipboard');
+    }
+  };
+
+  const copyShareableLink = async () => {
+    if (!shareableLink) {
+      toast.error('No shareable link available');
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(shareableLink);
+      toast.success('Shareable link copied to clipboard');
+    } catch (err) {
+      console.error('Failed to copy shareable link:', err);
+      toast.error('Failed to copy link');
+    }
+  };
+
+  const applyIndustryTemplate = (industryName) => {
+    if (INDUSTRY_TEMPLATES[industryName]) {
+      setIndustry(industryName);
+      const template = INDUSTRY_TEMPLATES[industryName];
+      // Auto-fill goal suggestions based on industry
+      if (!goal) {
+        setGoal(`Achieve ${template.commonGoals[0].toLowerCase()} in the ${industryName} industry`);
+      }
+      toast.success(`Applied ${industryName} template`);
+      setShowIndustryTemplates(false);
     }
   };
   
@@ -650,7 +771,18 @@ const NeuralStrategist = () => {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="industry" className="text-slate-200">Industry</Label>
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="industry" className="text-slate-200">Industry</Label>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setShowIndustryTemplates(!showIndustryTemplates)}
+                      className="text-xs text-emerald-400 hover:text-emerald-300 h-auto py-1"
+                    >
+                      {showIndustryTemplates ? 'Hide' : 'Show'} Templates
+                    </Button>
+                  </div>
                   <Input
                     id="industry"
                     placeholder="e.g., Technology, Healthcare, E-commerce"
@@ -658,6 +790,35 @@ const NeuralStrategist = () => {
                     onChange={(e) => setIndustry(e.target.value)}
                     className="bg-slate-900/50 border-slate-700 text-slate-100 placeholder:text-slate-500 focus:border-emerald-500"
                   />
+                  <AnimatePresence>
+                    {showIndustryTemplates && (
+                      <motion.div
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: 'auto' }}
+                        exit={{ opacity: 0, height: 0 }}
+                        className="overflow-hidden"
+                      >
+                        <div className="mt-2 p-3 bg-slate-900/30 rounded-lg border border-slate-700">
+                          <p className="text-xs text-slate-400 mb-2">Industry Templates:</p>
+                          <div className="flex flex-wrap gap-2">
+                            {Object.keys(INDUSTRY_TEMPLATES).map((ind) => (
+                              <button
+                                key={ind}
+                                onClick={() => applyIndustryTemplate(ind)}
+                                className={`px-2 py-1 text-xs rounded-md border transition-colors ${
+                                  industry === ind
+                                    ? 'bg-emerald-500/20 border-emerald-500 text-emerald-300'
+                                    : 'bg-slate-800/50 border-slate-600 text-slate-300 hover:border-slate-500'
+                                }`}
+                              >
+                                {ind}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                 </div>
 
                 <div className="space-y-2">
@@ -772,6 +933,16 @@ const NeuralStrategist = () => {
                       </>
                     )}
                   </Button>
+                  {shareableLink && (
+                    <Button 
+                      variant="outline" 
+                      className="w-full justify-start border-slate-700 bg-slate-900/50 hover:bg-slate-700/50 text-slate-200"
+                      onClick={copyShareableLink}
+                    >
+                      <Link2 className="mr-2 h-4 w-4" />
+                      Copy Shareable Link
+                    </Button>
+                  )}
                   <Button 
                     variant="outline" 
                     className="w-full justify-start border-slate-700 bg-slate-900/50 hover:bg-slate-700/50 text-slate-200"
@@ -779,7 +950,8 @@ const NeuralStrategist = () => {
                       if (navigator.share) {
                         navigator.share({
                           title: 'Strategy',
-                          text: streamedText || JSON.stringify(strategy, null, 2)
+                          text: streamedText || JSON.stringify(strategy, null, 2),
+                          url: shareableLink || window.location.href
                         }).catch(() => {
                           copyToClipboard();
                         });
@@ -943,11 +1115,23 @@ const NeuralStrategist = () => {
                   </div>
                 ) : strategy ? (
                   <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full flex flex-col">
-                    <TabsList className="w-full justify-start rounded-none border-b border-slate-700/50 px-6 bg-transparent">
+                    <TabsList className="w-full justify-start rounded-none border-b border-slate-700/50 px-6 bg-transparent flex-wrap">
                       <TabsTrigger value="strategy" className="py-4 text-slate-400 data-[state=active]:text-white data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-emerald-500">Strategy</TabsTrigger>
                       <TabsTrigger value="executive" className="py-4 text-slate-400 data-[state=active]:text-white data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-emerald-500">Executive Summary</TabsTrigger>
                       <TabsTrigger value="timeline" className="py-4 text-slate-400 data-[state=active]:text-white data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-emerald-500">Timeline</TabsTrigger>
                       <TabsTrigger value="risks" className="py-4 text-slate-400 data-[state=active]:text-white data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-emerald-500">Risks</TabsTrigger>
+                      {strategy?.competitiveAnalysis && (
+                        <TabsTrigger value="competitors" className="py-4 text-slate-400 data-[state=active]:text-white data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-emerald-500 flex items-center gap-1">
+                          <BarChart3 className="w-4 h-4" />
+                          Competitors
+                        </TabsTrigger>
+                      )}
+                      {strategy?.roiProjection && (
+                        <TabsTrigger value="roi" className="py-4 text-slate-400 data-[state=active]:text-white data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-emerald-500 flex items-center gap-1">
+                          <TrendingUp className="w-4 h-4" />
+                          ROI
+                        </TabsTrigger>
+                      )}
                     </TabsList>
                     
                     <div 
@@ -1073,6 +1257,124 @@ const NeuralStrategist = () => {
                           </div>
                         )}
                       </TabsContent>
+                      
+                      {strategy?.competitiveAnalysis && (
+                        <TabsContent value="competitors" className="m-0">
+                          <div className="space-y-6">
+                            <div>
+                              <h3 className="text-xl font-semibold mb-4 text-white flex items-center gap-2">
+                                <BarChart3 className="w-5 h-5" />
+                                Competitive Analysis
+                              </h3>
+                              
+                              {strategy.competitiveAnalysis.competitors && strategy.competitiveAnalysis.competitors.length > 0 && (
+                                <div className="mb-6">
+                                  <h4 className="font-medium mb-3 text-slate-200">Main Competitors</h4>
+                                  <div className="flex flex-wrap gap-2">
+                                    {strategy.competitiveAnalysis.competitors.map((competitor, i) => (
+                                      <span key={i} className="px-3 py-1.5 bg-slate-800/50 text-slate-200 text-sm rounded-lg border border-slate-700">
+                                        {competitor}
+                                      </span>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                              
+                              {strategy.competitiveAnalysis.competitiveAdvantages && strategy.competitiveAnalysis.competitiveAdvantages.length > 0 && (
+                                <div className="mb-6 p-4 bg-emerald-500/10 rounded-lg border border-emerald-500/20">
+                                  <h4 className="font-medium mb-2 text-emerald-400">Competitive Advantages</h4>
+                                  <ul className="space-y-2">
+                                    {strategy.competitiveAnalysis.competitiveAdvantages.map((advantage, i) => (
+                                      <li key={i} className="flex items-start text-slate-300">
+                                        <span className="mr-2 text-emerald-500">✓</span>
+                                        <span>{advantage}</span>
+                                      </li>
+                                    ))}
+                                  </ul>
+                                </div>
+                              )}
+                              
+                              {strategy.competitiveAnalysis.marketOpportunities && strategy.competitiveAnalysis.marketOpportunities.length > 0 && (
+                                <div className="mb-6 p-4 bg-cyan-500/10 rounded-lg border border-cyan-500/20">
+                                  <h4 className="font-medium mb-2 text-cyan-400">Market Opportunities</h4>
+                                  <ul className="space-y-2">
+                                    {strategy.competitiveAnalysis.marketOpportunities.map((opportunity, i) => (
+                                      <li key={i} className="flex items-start text-slate-300">
+                                        <span className="mr-2 text-cyan-500">•</span>
+                                        <span>{opportunity}</span>
+                                      </li>
+                                    ))}
+                                  </ul>
+                                </div>
+                              )}
+                              
+                              {strategy.competitiveAnalysis.differentiationStrategy && (
+                                <div className="p-4 bg-slate-800/50 rounded-lg border border-slate-700">
+                                  <h4 className="font-medium mb-2 text-white">Differentiation Strategy</h4>
+                                  <p className="text-slate-300">{strategy.competitiveAnalysis.differentiationStrategy}</p>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </TabsContent>
+                      )}
+                      
+                      {strategy?.roiProjection && (
+                        <TabsContent value="roi" className="m-0">
+                          <div className="space-y-6">
+                            <div>
+                              <h3 className="text-xl font-semibold mb-4 text-white flex items-center gap-2">
+                                <TrendingUp className="w-5 h-5" />
+                                ROI Projection
+                              </h3>
+                              
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                                {strategy.roiProjection.estimatedInvestment && (
+                                  <div className="p-4 bg-slate-800/50 rounded-lg border border-slate-700">
+                                    <h4 className="font-medium text-slate-400 text-sm mb-2">Estimated Investment</h4>
+                                    <p className="text-2xl font-bold text-white">{strategy.roiProjection.estimatedInvestment}</p>
+                                  </div>
+                                )}
+                                
+                                {strategy.roiProjection.expectedReturn && (
+                                  <div className="p-4 bg-slate-800/50 rounded-lg border border-slate-700">
+                                    <h4 className="font-medium text-slate-400 text-sm mb-2">Expected Return</h4>
+                                    <p className="text-2xl font-bold text-emerald-400">{strategy.roiProjection.expectedReturn}</p>
+                                  </div>
+                                )}
+                                
+                                {strategy.roiProjection.roiPercentage && (
+                                  <div className="p-4 bg-emerald-500/10 rounded-lg border border-emerald-500/20">
+                                    <h4 className="font-medium text-emerald-400 text-sm mb-2">ROI Percentage</h4>
+                                    <p className="text-2xl font-bold text-emerald-300">{strategy.roiProjection.roiPercentage}</p>
+                                  </div>
+                                )}
+                                
+                                {strategy.roiProjection.paybackPeriod && (
+                                  <div className="p-4 bg-slate-800/50 rounded-lg border border-slate-700">
+                                    <h4 className="font-medium text-slate-400 text-sm mb-2">Payback Period</h4>
+                                    <p className="text-2xl font-bold text-white">{strategy.roiProjection.paybackPeriod}</p>
+                                  </div>
+                                )}
+                              </div>
+                              
+                              {strategy.roiProjection.keyAssumptions && strategy.roiProjection.keyAssumptions.length > 0 && (
+                                <div className="p-4 bg-slate-800/50 rounded-lg border border-slate-700">
+                                  <h4 className="font-medium mb-3 text-white">Key Assumptions</h4>
+                                  <ul className="space-y-2">
+                                    {strategy.roiProjection.keyAssumptions.map((assumption, i) => (
+                                      <li key={i} className="flex items-start text-slate-300">
+                                        <span className="mr-2 text-slate-400">•</span>
+                                        <span>{assumption}</span>
+                                      </li>
+                                    ))}
+                                  </ul>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </TabsContent>
+                      )}
                     </div>
                   </Tabs>
                 ) : (
