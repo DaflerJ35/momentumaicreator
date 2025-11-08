@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { ref, onValue, set, serverTimestamp, off } from 'firebase/database';
+import { ref, onValue, set, serverTimestamp, off, onDisconnect } from 'firebase/database';
 import { database } from '../lib/firebase';
 import { useAuth } from './AuthContext';
 
@@ -14,7 +14,11 @@ export const CollaborationProvider = ({ children }) => {
 
   // Initialize presence
   useEffect(() => {
-    if (!currentUser || !database) return;
+    if (!currentUser || !database || database._isMock) {
+      // Provide mock values when Firebase is not available
+      setIsConnected(false);
+      return;
+    }
 
     const userPresenceRef = ref(database, `presence/${currentUser.uid}`);
     const connectedRef = ref(database, '.info/connected');
@@ -43,12 +47,13 @@ export const CollaborationProvider = ({ children }) => {
         setIsConnected(true);
         setOnline();
 
-        // Set offline when disconnected
-        const onDisconnectRef = ref(database, `presence/${currentUser.uid}`);
-        set(onDisconnectRef, {
-          online: false,
-          lastSeen: serverTimestamp(),
-        });
+        // Set offline when disconnected using onDisconnect
+        if (userPresenceRef) {
+          onDisconnect(userPresenceRef).set({
+            online: false,
+            lastSeen: serverTimestamp(),
+          });
+        }
       } else {
         setIsConnected(false);
       }
@@ -64,7 +69,10 @@ export const CollaborationProvider = ({ children }) => {
 
   // Monitor active users
   useEffect(() => {
-    if (!database) return;
+    if (!database || database._isMock || !currentUser) {
+      setActiveUsers([]);
+      return;
+    }
 
     const presenceRef = ref(database, 'presence');
     
@@ -72,7 +80,7 @@ export const CollaborationProvider = ({ children }) => {
       const presenceData = snapshot.val();
       if (presenceData) {
         const users = Object.entries(presenceData)
-          .filter(([uid, data]) => data.online && uid !== currentUser?.uid)
+          .filter(([uid, data]) => data && data.online && uid !== currentUser?.uid)
           .map(([uid, data]) => ({ uid, ...data }));
         setActiveUsers(users);
         setPresence(presenceData);
@@ -86,8 +94,9 @@ export const CollaborationProvider = ({ children }) => {
 
   // Update cursor position
   const updateCursor = useCallback((pageId, x, y) => {
-    if (!currentUser || !database) return;
+    if (!currentUser || !database || database._isMock) return;
 
+    // Throttle cursor updates (update max once per 100ms)
     const cursorRef = ref(database, `cursors/${pageId}/${currentUser.uid}`);
     set(cursorRef, {
       x,
@@ -98,36 +107,42 @@ export const CollaborationProvider = ({ children }) => {
     });
   }, [currentUser]);
 
-  // Monitor cursors
-  useEffect(() => {
-    if (!database || !currentUser) return;
+  // Monitor cursors for a specific page
+  const usePageCursors = useCallback((pageId) => {
+    const [pageCursors, setPageCursors] = useState({});
 
-    const cursorsRef = ref(database, 'cursors');
-    
-    const unsubscribe = onValue(cursorsRef, (snapshot) => {
-      const cursorsData = snapshot.val();
-      if (cursorsData) {
-        // Flatten nested cursor structure
-        const allCursors = {};
-        Object.entries(cursorsData).forEach(([pageId, pageCursors]) => {
-          Object.entries(pageCursors).forEach(([uid, cursor]) => {
+    useEffect(() => {
+      if (!database || database._isMock || !currentUser || !pageId) {
+        setPageCursors({});
+        return;
+      }
+
+      const cursorsRef = ref(database, `cursors/${pageId}`);
+      
+      const unsubscribe = onValue(cursorsRef, (snapshot) => {
+        const cursorsData = snapshot.val();
+        if (cursorsData) {
+          const filteredCursors = {};
+          Object.entries(cursorsData).forEach(([uid, cursor]) => {
             if (uid !== currentUser.uid && cursor) {
-              allCursors[`${pageId}-${uid}`] = { pageId, ...cursor };
+              filteredCursors[uid] = cursor;
             }
           });
-        });
-        setCursors(allCursors);
-      }
-    });
+          setPageCursors(filteredCursors);
+        }
+      });
 
-    return () => {
-      off(cursorsRef);
-    };
+      return () => {
+        off(cursorsRef);
+      };
+    }, [currentUser, pageId]);
+
+    return pageCursors;
   }, [currentUser]);
 
   // Broadcast typing status
   const broadcastTyping = useCallback((pageId, isTyping) => {
-    if (!currentUser || !database) return;
+    if (!currentUser || !database || database._isMock) return;
 
     const typingRef = ref(database, `typing/${pageId}/${currentUser.uid}`);
     if (isTyping) {
@@ -143,7 +158,7 @@ export const CollaborationProvider = ({ children }) => {
 
   // Send real-time message
   const sendMessage = useCallback((roomId, message) => {
-    if (!currentUser || !database) return;
+    if (!currentUser || !database || database._isMock) return;
 
     const messageRef = ref(database, `messages/${roomId}/${Date.now()}`);
     set(messageRef, {
@@ -161,6 +176,7 @@ export const CollaborationProvider = ({ children }) => {
     presence,
     isConnected,
     updateCursor,
+    usePageCursors,
     broadcastTyping,
     sendMessage,
   };
@@ -175,10 +191,19 @@ export const CollaborationProvider = ({ children }) => {
 export const useCollaboration = () => {
   const context = useContext(CollaborationContext);
   if (!context) {
-    throw new Error('useCollaboration must be used within CollaborationProvider');
+    // Return mock values if context is not available
+    return {
+      activeUsers: [],
+      cursors: {},
+      presence: {},
+      isConnected: false,
+      updateCursor: () => {},
+      usePageCursors: () => ({}),
+      broadcastTyping: () => {},
+      sendMessage: () => {},
+    };
   }
   return context;
 };
 
 export default CollaborationContext;
-

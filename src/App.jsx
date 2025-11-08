@@ -11,6 +11,7 @@ import AnimatedBackground from './components/AnimatedBackground';
 import ParticleBackground from './components/animations/ParticleBackground';
 import CommandPalette from './components/CommandPalette';
 import ErrorBoundary from './components/ErrorBoundary';
+import ActiveUsersIndicator from './components/ActiveUsersIndicator';
 import NotFound from './pages/NotFound';
 import { Toaster } from 'sonner';
 import { LoadingSpinner } from './components/ui/LoadingSpinner';
@@ -143,6 +144,7 @@ function AppContent() {
             <AnimatedBackground />
             <ParticleBackground particleCount={30} />
             <CommandPalette />
+            <ActiveUsersIndicator />
           </>
         )}
         {isPublicRoute ? (

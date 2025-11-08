@@ -3,19 +3,8 @@ import { useCollaboration } from '../contexts/CollaborationContext';
 import { useEffect, useState } from 'react';
 
 const CollaborationCursor = ({ pageId }) => {
-  const { cursors, activeUsers } = useCollaboration();
-  const [localCursors, setLocalCursors] = useState({});
-
-  useEffect(() => {
-    // Filter cursors for this page
-    const pageCursors = {};
-    Object.entries(cursors).forEach(([key, cursor]) => {
-      if (cursor.pageId === pageId) {
-        pageCursors[cursor.userId] = cursor;
-      }
-    });
-    setLocalCursors(pageCursors);
-  }, [cursors, pageId]);
+  const { usePageCursors, activeUsers } = useCollaboration();
+  const pageCursors = usePageCursors(pageId);
 
   // Update cursor position on mouse move
   useEffect(() => {
@@ -32,9 +21,9 @@ const CollaborationCursor = ({ pageId }) => {
   return (
     <div className="fixed inset-0 pointer-events-none z-50">
       <AnimatePresence>
-        {Object.entries(localCursors).map(([userId, cursor]) => {
-          const user = activeUsers.find(u => u.uid === userId);
-          if (!user) return null;
+        {Object.entries(pageCursors || {}).map(([userId, cursor]) => {
+          const user = activeUsers.find(u => u.uid === userId) || { uid: userId, name: cursor.userName || 'User' };
+          if (!cursor || !cursor.x || !cursor.y) return null;
 
           return (
             <motion.div
