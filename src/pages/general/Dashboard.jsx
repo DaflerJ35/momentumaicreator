@@ -270,8 +270,21 @@ const Dashboard = () => {
     }
   };
 
+  const { activeUsers, updateCursor } = useCollaboration();
+
+  // Update cursor position
+  useEffect(() => {
+    const handleMouseMove = (e) => {
+      updateCursor('dashboard', e.clientX, e.clientY);
+    };
+    window.addEventListener('mousemove', handleMouseMove);
+    return () => window.removeEventListener('mousemove', handleMouseMove);
+  }, [updateCursor]);
+
   return (
     <div className="min-h-screen p-6 md:p-8 relative cosmic-bg">
+      <CollaborationCursor pageId="dashboard" />
+      
       {/* Galaxy Background Effects - Matching Landing Page */}
       <div className="fixed inset-0 -z-10 overflow-hidden pointer-events-none">
         <div className="galaxy-bg" />

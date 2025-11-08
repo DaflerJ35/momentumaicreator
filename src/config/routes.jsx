@@ -33,6 +33,7 @@ const LandingPage = lazy(() => import('../pages/general/LandingPage'));
 const Dashboard = lazy(() => import('../pages/general/Dashboard'));
 const Analytics = lazy(() => import('../pages/analytics/Analytics'));
 const PlatformAnalytics = lazy(() => import('../pages/analytics/PlatformAnalytics'));
+const AdvancedAnalytics = lazy(() => import('../pages/analytics/AdvancedAnalytics'));
 const SettingsPage = lazy(() => import('../pages/account/Settings'));
 const Billing = lazy(() => import('../pages/account/Billing'));
 const Pricing = lazy(() => import('../pages/pricing/Pricing'));

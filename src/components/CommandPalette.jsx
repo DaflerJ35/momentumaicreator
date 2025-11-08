@@ -26,8 +26,12 @@ const CommandPalette = () => {
 
   // Build searchable items
   const items = useMemo(() => {
+    if (!routes || !Array.isArray(routes)) {
+      return [];
+    }
+    
     const navItems = routes
-      .filter(route => route.showInNav && route.title)
+      .filter(route => route && route.showInNav && route.title)
       .map(route => ({
         id: route.path,
         title: route.title,

@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Moon, Sun, Bell, User, Menu, X, Sparkles } from 'lucide-react';
 import { FloatingElement, PulsingElement } from './animations/FloatingElements';
 import { ShimmerText } from './animations/ShimmerEffect';
+import ThemeSwitcher from './ThemeSwitcher';
 
 function Navbar({ user, onAuthClick, onMenuToggle }) {
   const [darkMode, setDarkMode] = useState(() => {
@@ -71,6 +72,9 @@ function Navbar({ user, onAuthClick, onMenuToggle }) {
         </div>
 
         <div className="flex items-center space-x-3">
+          {/* Theme Switcher */}
+          <ThemeSwitcher />
+          
           {/* Dark mode toggle */}
           <motion.button
             onClick={toggleDarkMode}

@@ -2,7 +2,6 @@ import React from 'react';
 import { motion } from 'framer-motion';
 import { AlertTriangle, RefreshCw, Home } from 'lucide-react';
 import { Button } from './ui/button';
-import { useNavigate } from 'react-router-dom';
 
 class ErrorBoundary extends React.Component {
   constructor(props) {
@@ -69,7 +68,10 @@ class ErrorBoundary extends React.Component {
 }
 
 const ErrorFallback = ({ error, errorInfo, errorId, onReset }) => {
-  const navigate = useNavigate();
+  // Use window.location for navigation to avoid hook issues
+  const navigateTo = (path) => {
+    window.location.href = path;
+  };
 
   return (
     <div className="min-h-screen flex items-center justify-center p-6 cosmic-bg relative">
@@ -138,7 +140,7 @@ const ErrorFallback = ({ error, errorInfo, errorId, onReset }) => {
               Try Again
             </Button>
             <Button
-              onClick={() => navigate('/dashboard')}
+              onClick={() => navigateTo('/dashboard')}
               variant="outline"
               className="border-slate-700 text-slate-300 hover:bg-slate-800/50"
             >

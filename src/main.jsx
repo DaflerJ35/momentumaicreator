@@ -5,6 +5,8 @@ import './index.css';
 import { BrowserRouter } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
 import { AIProvider } from './contexts/AIContext';
+import { CollaborationProvider } from './contexts/CollaborationContext';
+import { ThemeProvider } from './contexts/ThemeContext';
 import ErrorBoundary from './components/ErrorBoundary';
 
 // Performance monitoring
@@ -56,11 +58,15 @@ ReactDOM.createRoot(document.getElementById('root')).render(
           v7_relativeSplatPath: true,
         }}
       >
-        <AuthProvider>
-          <AIProvider>
-            <App />
-          </AIProvider>
-        </AuthProvider>
+        <ThemeProvider>
+          <AuthProvider>
+            <AIProvider>
+              <CollaborationProvider>
+                <App />
+              </CollaborationProvider>
+            </AIProvider>
+          </AuthProvider>
+        </ThemeProvider>
       </BrowserRouter>
     </ErrorBoundary>
   </React.StrictMode>
