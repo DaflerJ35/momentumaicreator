@@ -272,13 +272,22 @@ const Dashboard = () => {
 
   const { activeUsers, updateCursor } = useCollaboration();
 
-  // Update cursor position
+  // Update cursor position (throttled to avoid overwhelming Firebase)
   useEffect(() => {
+    let throttleTimeout;
     const handleMouseMove = (e) => {
-      updateCursor('dashboard', e.clientX, e.clientY);
+      if (throttleTimeout) return;
+      throttleTimeout = setTimeout(() => {
+        updateCursor('dashboard', e.clientX, e.clientY);
+        throttleTimeout = null;
+      }, 100); // Update max once per 100ms
     };
+    
     window.addEventListener('mousemove', handleMouseMove);
-    return () => window.removeEventListener('mousemove', handleMouseMove);
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      if (throttleTimeout) clearTimeout(throttleTimeout);
+    };
   }, [updateCursor]);
 
   return (

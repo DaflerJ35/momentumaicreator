@@ -15,7 +15,6 @@ export const CollaborationProvider = ({ children }) => {
   // Initialize presence
   useEffect(() => {
     if (!currentUser || !database || database._isMock) {
-      // Provide mock values when Firebase is not available
       setIsConnected(false);
       return;
     }
@@ -48,12 +47,10 @@ export const CollaborationProvider = ({ children }) => {
         setOnline();
 
         // Set offline when disconnected using onDisconnect
-        if (userPresenceRef) {
-          onDisconnect(userPresenceRef).set({
-            online: false,
-            lastSeen: serverTimestamp(),
-          });
-        }
+        onDisconnect(userPresenceRef).set({
+          online: false,
+          lastSeen: serverTimestamp(),
+        });
       } else {
         setIsConnected(false);
       }
@@ -92,11 +89,10 @@ export const CollaborationProvider = ({ children }) => {
     };
   }, [currentUser]);
 
-  // Update cursor position
+  // Update cursor position (throttled)
   const updateCursor = useCallback((pageId, x, y) => {
     if (!currentUser || !database || database._isMock) return;
 
-    // Throttle cursor updates (update max once per 100ms)
     const cursorRef = ref(database, `cursors/${pageId}/${currentUser.uid}`);
     set(cursorRef, {
       x,
@@ -138,6 +134,32 @@ export const CollaborationProvider = ({ children }) => {
     }, [currentUser, pageId]);
 
     return pageCursors;
+  }, [currentUser]);
+
+  // Monitor all cursors
+  useEffect(() => {
+    if (!database || database._isMock || !currentUser) return;
+
+    const cursorsRef = ref(database, 'cursors');
+    
+    const unsubscribe = onValue(cursorsRef, (snapshot) => {
+      const cursorsData = snapshot.val();
+      if (cursorsData) {
+        const allCursors = {};
+        Object.entries(cursorsData).forEach(([pageId, pageCursors]) => {
+          Object.entries(pageCursors || {}).forEach(([uid, cursor]) => {
+            if (uid !== currentUser.uid && cursor) {
+              allCursors[`${pageId}-${uid}`] = { pageId, ...cursor };
+            }
+          });
+        });
+        setCursors(allCursors);
+      }
+    });
+
+    return () => {
+      off(cursorsRef);
+    };
   }, [currentUser]);
 
   // Broadcast typing status
@@ -191,7 +213,7 @@ export const CollaborationProvider = ({ children }) => {
 export const useCollaboration = () => {
   const context = useContext(CollaborationContext);
   if (!context) {
-    // Return mock values if context is not available
+    // Return mock values if context is not available (graceful degradation)
     return {
       activeUsers: [],
       cursors: {},
