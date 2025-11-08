@@ -436,16 +436,44 @@ export const unifiedAPI = {
   post: async (endpoint, data, options = {}) => {
     const url = endpoint.startsWith('http') ? endpoint : `${API_URL}${endpoint}`;
     const token = await getAuthToken().catch(() => null);
+    const method = options.method || 'POST';
     
-    const response = await fetch(url, {
+    const fetchOptions = {
       ...options,
-      method: 'POST',
+      method,
       headers: {
         'Content-Type': 'application/json',
         ...(token && { 'Authorization': `Bearer ${token}` }),
         ...options.headers,
       },
-      body: JSON.stringify(data),
+    };
+    
+    if (method !== 'GET' && data) {
+      fetchOptions.body = JSON.stringify(data);
+    }
+    
+    const response = await fetch(url, fetchOptions);
+    
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ error: 'Request failed' }));
+      throw new Error(error.error || `Request failed: ${response.statusText}`);
+    }
+    
+    return response.json();
+  },
+  
+  delete: async (endpoint, options = {}) => {
+    const url = endpoint.startsWith('http') ? endpoint : `${API_URL}${endpoint}`;
+    const token = await getAuthToken().catch(() => null);
+    
+    const response = await fetch(url, {
+      ...options,
+      method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token && { 'Authorization': `Bearer ${token}` }),
+        ...options.headers,
+      },
     });
     
     if (!response.ok) {

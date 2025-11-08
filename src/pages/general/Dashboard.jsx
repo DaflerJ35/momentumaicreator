@@ -6,6 +6,7 @@ import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
 import { useAuth } from '../../contexts/AuthContext';
 import { PLATFORMS, getPlatformsByCategory } from '../../lib/platforms';
+import { unifiedAPI } from '../../lib/unifiedAPI';
 import { 
   TrendingUp, 
   FileText, 
@@ -182,6 +183,26 @@ const Dashboard = () => {
     },
   ];
 
+  const [connectedPlatforms, setConnectedPlatforms] = useState([]);
+  const [loadingPlatforms, setLoadingPlatforms] = useState(true);
+
+  useEffect(() => {
+    loadConnectedPlatforms();
+  }, []);
+
+  const loadConnectedPlatforms = async () => {
+    try {
+      const response = await unifiedAPI.get('/platforms/connected');
+      if (response.success) {
+        setConnectedPlatforms(response.platforms.map(p => p.platformId));
+      }
+    } catch (error) {
+      console.error('Failed to load connected platforms:', error);
+    } finally {
+      setLoadingPlatforms(false);
+    }
+  };
+
   const subscriptionPlatforms = getPlatformsByCategory('subscription');
   const socialPlatforms = getPlatformsByCategory('social');
   const blogPlatforms = getPlatformsByCategory('blog');
@@ -357,13 +378,20 @@ const Dashboard = () => {
               <motion.div
                 key={platform.id}
                 whileHover={{ scale: 1.05, y: -4 }}
+                onClick={() => navigate('/integrations')}
                 className="rounded-xl glass-morphism border border-white/10 hover:border-neon-violet/50 p-4 cursor-pointer transition-all group"
               >
                 <div className="text-3xl mb-2">{platform.icon}</div>
                 <div className="text-sm font-semibold text-white group-hover:text-neon-violet transition-colors">
                   {platform.name}
                 </div>
-                <div className="text-xs text-slate-400 mt-1">Not connected</div>
+                <div className="text-xs mt-1">
+                  {connectedPlatforms.includes(platform.id) ? (
+                    <span className="text-emerald-400">✓ Connected</span>
+                  ) : (
+                    <span className="text-slate-400">Not connected</span>
+                  )}
+                </div>
               </motion.div>
             ))}
           </div>
@@ -377,13 +405,20 @@ const Dashboard = () => {
               <motion.div
                 key={platform.id}
                 whileHover={{ scale: 1.05, y: -4 }}
+                onClick={() => navigate('/integrations')}
                 className="rounded-xl glass-morphism border border-white/10 hover:border-neon-blue/50 p-4 cursor-pointer transition-all group"
               >
                 <div className="text-3xl mb-2">{platform.icon}</div>
                 <div className="text-sm font-semibold text-white group-hover:text-neon-blue transition-colors">
                   {platform.name}
                 </div>
-                <div className="text-xs text-slate-400 mt-1">Not connected</div>
+                <div className="text-xs mt-1">
+                  {connectedPlatforms.includes(platform.id) ? (
+                    <span className="text-emerald-400">✓ Connected</span>
+                  ) : (
+                    <span className="text-slate-400">Not connected</span>
+                  )}
+                </div>
               </motion.div>
             ))}
           </div>
@@ -397,13 +432,20 @@ const Dashboard = () => {
               <motion.div
                 key={platform.id}
                 whileHover={{ scale: 1.05, y: -4 }}
+                onClick={() => navigate('/integrations')}
                 className="rounded-xl glass-morphism border border-white/10 hover:border-neon-magenta/50 p-4 cursor-pointer transition-all group"
               >
                 <div className="text-3xl mb-2">{platform.icon}</div>
                 <div className="text-sm font-semibold text-white group-hover:text-neon-magenta transition-colors">
                   {platform.name}
                 </div>
-                <div className="text-xs text-slate-400 mt-1">Not connected</div>
+                <div className="text-xs mt-1">
+                  {connectedPlatforms.includes(platform.id) ? (
+                    <span className="text-emerald-400">✓ Connected</span>
+                  ) : (
+                    <span className="text-slate-400">Not connected</span>
+                  )}
+                </div>
               </motion.div>
             ))}
           </div>

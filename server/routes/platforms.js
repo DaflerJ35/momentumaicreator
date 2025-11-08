@@ -2,6 +2,8 @@ const express = require('express');
 const router = express.Router();
 const logger = require('../utils/logger');
 const { verifyFirebaseToken } = require('../middleware/auth');
+const platformService = require('../services/platformService');
+const postingService = require('../services/platformPostingService');
 
 // Platform OAuth and API integrations
 // This handles ALL platforms: OnlyFans, Fansly, Fanvue, Fanplace, Instagram, Twitter, etc.
@@ -37,20 +39,43 @@ router.get('/:platformId/oauth/init', verifyFirebaseToken, async (req, res) => {
 /**
  * OAuth callback handler
  * GET /api/platforms/:platformId/oauth/callback
+ * Note: This route doesn't use verifyFirebaseToken because OAuth callbacks come from external services
  */
-router.get('/:platformId/oauth/callback', verifyFirebaseToken, async (req, res) => {
+router.get('/:platformId/oauth/callback', async (req, res) => {
   try {
     const { platformId } = req.params;
-    const { code, state } = req.query;
-    const userId = req.user.uid;
+    const { code, state, error } = req.query;
+    
+    if (error) {
+      logger.error(`OAuth error from ${platformId}: ${error}`);
+      return res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:5173'}/integrations?error=${encodeURIComponent(error)}`);
+    }
+    
+    if (!code || !state) {
+      return res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:5173'}/integrations?error=missing_code_or_state`);
+    }
+    
+    // Parse state to get userId
+    let stateData;
+    try {
+      stateData = JSON.parse(Buffer.from(state, 'base64').toString());
+    } catch (e) {
+      logger.error(`Invalid state parameter: ${e.message}`);
+      return res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:5173'}/integrations?error=invalid_state`);
+    }
+    
+    const userId = stateData.userId;
+    if (!userId) {
+      return res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:5173'}/integrations?error=missing_user_id`);
+    }
     
     logger.info(`OAuth callback for platform: ${platformId}, user: ${userId}`);
     
     // Exchange code for access token
     const tokens = await exchangeOAuthCode(platformId, code, state);
     
-    // Store tokens securely (in production, use encrypted storage)
-    await storePlatformTokens(userId, platformId, tokens);
+    // Store tokens securely in Firebase
+    await platformService.storePlatformTokens(userId, platformId, tokens);
     
     res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:5173'}/integrations?connected=${platformId}`);
   } catch (error) {
@@ -67,7 +92,7 @@ router.get('/connected', verifyFirebaseToken, async (req, res) => {
   try {
     const userId = req.user.uid;
     
-    const connectedPlatforms = await getConnectedPlatforms(userId);
+    const connectedPlatforms = await platformService.getConnectedPlatforms(userId);
     
     res.json({
       success: true,
@@ -91,7 +116,7 @@ router.delete('/:platformId', verifyFirebaseToken, async (req, res) => {
     const { platformId } = req.params;
     const userId = req.user.uid;
     
-    await disconnectPlatform(userId, platformId);
+    await platformService.disconnectPlatform(userId, platformId);
     
     res.json({
       success: true,
@@ -118,21 +143,37 @@ router.post('/:platformId/post', verifyFirebaseToken, async (req, res) => {
     
     logger.info(`Posting to ${platformId} for user ${userId}`);
     
-    // Validate platform connection
-    const tokens = await getPlatformTokens(userId, platformId);
-    if (!tokens) {
-      return res.status(400).json({
-        success: false,
-        error: `Platform ${platformId} not connected`,
+    // If scheduled, store for later
+    if (scheduleTime && new Date(scheduleTime) > new Date()) {
+      const postId = await platformService.storeScheduledPost(userId, {
+        platformId,
+        content,
+        media,
+        scheduleTime: new Date(scheduleTime).getTime(),
+        options,
+      });
+      
+      return res.json({
+        success: true,
+        scheduled: true,
+        postId,
+        scheduleTime,
       });
     }
     
-    // Post to platform
-    const result = await postToPlatform(platformId, tokens, {
+    // Post immediately
+    const result = await postingService.postToPlatform(platformId, userId, {
       content,
       media,
-      scheduleTime,
       options,
+    });
+    
+    // Store analytics
+    await platformService.storePostAnalytics(userId, platformId, result.postId, {
+      impressions: 0,
+      engagements: 0,
+      reach: 0,
+      clicks: 0,
     });
     
     res.json({
@@ -159,10 +200,51 @@ router.post('/schedule', verifyFirebaseToken, async (req, res) => {
     
     logger.info(`Scheduling content for ${platforms.length} platforms, user: ${userId}`);
     
+    // If scheduled, store all posts
+    if (scheduleTime && new Date(scheduleTime) > new Date()) {
+      const results = await Promise.allSettled(
+        platforms.map(platformId => 
+          platformService.storeScheduledPost(userId, {
+            platformId,
+            content,
+            media,
+            scheduleTime: new Date(scheduleTime).getTime(),
+            options,
+          })
+        )
+      );
+      
+      return res.json({
+        success: true,
+        scheduled: true,
+        results: results.map((r, i) => ({
+          platform: platforms[i],
+          success: r.status === 'fulfilled',
+          postId: r.status === 'fulfilled' ? r.value : null,
+          error: r.status === 'rejected' ? r.reason.message : null,
+        })),
+      });
+    }
+    
+    // Post immediately to all platforms
     const results = await Promise.allSettled(
       platforms.map(platformId => 
-        schedulePost(userId, platformId, { content, media, scheduleTime, options })
+        postingService.postToPlatform(platformId, userId, { content, media, options })
       )
+    );
+    
+    // Store analytics for successful posts
+    await Promise.all(
+      results.map(async (r, i) => {
+        if (r.status === 'fulfilled' && r.value.postId) {
+          await platformService.storePostAnalytics(userId, platforms[i], r.value.postId, {
+            impressions: 0,
+            engagements: 0,
+            reach: 0,
+            clicks: 0,
+          });
+        }
+      })
     );
     
     res.json({
@@ -183,6 +265,30 @@ router.post('/schedule', verifyFirebaseToken, async (req, res) => {
 });
 
 /**
+ * Get scheduled posts
+ * GET /api/platforms/scheduled
+ */
+router.get('/scheduled', verifyFirebaseToken, async (req, res) => {
+  try {
+    const userId = req.user.uid;
+    const limit = parseInt(req.query.limit) || 50;
+    
+    const posts = await platformService.getScheduledPosts(userId, limit);
+    
+    res.json({
+      success: true,
+      posts,
+    });
+  } catch (error) {
+    logger.error(`Get scheduled posts error: ${error.message}`);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+    });
+  }
+});
+
+/**
  * Get platform analytics
  * GET /api/platforms/:platformId/analytics
  */
@@ -192,9 +298,9 @@ router.get('/:platformId/analytics', verifyFirebaseToken, async (req, res) => {
     const { startDate, endDate } = req.query;
     const userId = req.user.uid;
     
-    const analytics = await getPlatformAnalytics(userId, platformId, {
-      startDate,
-      endDate,
+    const analytics = await platformService.getPlatformAnalytics(userId, platformId, {
+      startDate: startDate ? new Date(startDate).getTime() : null,
+      endDate: endDate ? new Date(endDate).getTime() : null,
     });
     
     res.json({
@@ -286,75 +392,70 @@ async function getOAuthUrl(platformId, userId) {
 }
 
 async function exchangeOAuthCode(platformId, code, state) {
-  // Platform-specific token exchange
-  // In production, implement actual OAuth flows for each platform
   logger.info(`Exchanging OAuth code for ${platformId}`);
   
-  // This is a placeholder - implement actual OAuth token exchange
-  return {
-    accessToken: `mock_token_${platformId}_${Date.now()}`,
-    refreshToken: `mock_refresh_${platformId}_${Date.now()}`,
-    expiresAt: Date.now() + 3600000, // 1 hour
-  };
-}
-
-async function storePlatformTokens(userId, platformId, tokens) {
-  // In production, store encrypted tokens in database
-  logger.info(`Storing tokens for ${platformId}, user: ${userId}`);
-  // TODO: Implement secure token storage
-}
-
-async function getPlatformTokens(userId, platformId) {
-  // In production, retrieve from encrypted database
-  logger.info(`Getting tokens for ${platformId}, user: ${userId}`);
-  // TODO: Implement token retrieval
-  return null; // Placeholder
-}
-
-async function getConnectedPlatforms(userId) {
-  // In production, query database for connected platforms
-  logger.info(`Getting connected platforms for user: ${userId}`);
-  return [];
-}
-
-async function disconnectPlatform(userId, platformId) {
-  // In production, remove tokens from database
-  logger.info(`Disconnecting ${platformId} for user: ${userId}`);
-}
-
-async function postToPlatform(platformId, tokens, { content, media, scheduleTime, options }) {
-  // Platform-specific posting logic
-  logger.info(`Posting to ${platformId}`);
+  // Parse state to get userId
+  const stateData = JSON.parse(Buffer.from(state, 'base64').toString());
+  const userId = stateData.userId;
   
-  // In production, implement actual API calls to each platform
-  return {
-    postId: `post_${platformId}_${Date.now()}`,
-    url: `https://${platformId}.com/post/123`,
-    scheduled: !!scheduleTime,
-  };
-}
-
-async function schedulePost(userId, platformId, { content, media, scheduleTime, options }) {
-  // Store scheduled post in database
-  logger.info(`Scheduling post to ${platformId} for user: ${userId}`);
+  // Platform-specific token exchange
+  const axios = require('axios');
   
-  return {
-    scheduledId: `scheduled_${platformId}_${Date.now()}`,
-    scheduleTime,
-  };
-}
-
-async function getPlatformAnalytics(userId, platformId, { startDate, endDate }) {
-  // Fetch analytics from platform API
-  logger.info(`Getting analytics for ${platformId}, user: ${userId}`);
-  
-  return {
-    impressions: Math.floor(Math.random() * 100000),
-    engagements: Math.floor(Math.random() * 10000),
-    reach: Math.floor(Math.random() * 50000),
-    clicks: Math.floor(Math.random() * 5000),
-  };
+  try {
+    switch (platformId) {
+      case 'instagram': {
+        const response = await axios.post('https://api.instagram.com/oauth/access_token', {
+          client_id: process.env.INSTAGRAM_CLIENT_ID,
+          client_secret: process.env.INSTAGRAM_CLIENT_SECRET,
+          grant_type: 'authorization_code',
+          redirect_uri: `${process.env.API_URL || 'http://localhost:3001'}/api/platforms/instagram/oauth/callback`,
+          code,
+        });
+        
+        return {
+          accessToken: response.data.access_token,
+          expiresAt: Date.now() + (response.data.expires_in * 1000),
+        };
+      }
+      
+      case 'twitter': {
+        const credentials = Buffer.from(`${process.env.TWITTER_CLIENT_ID}:${process.env.TWITTER_CLIENT_SECRET}`).toString('base64');
+        const response = await axios.post(
+          'https://api.twitter.com/2/oauth2/token',
+          new URLSearchParams({
+            code,
+            grant_type: 'authorization_code',
+            client_id: process.env.TWITTER_CLIENT_ID,
+            redirect_uri: `${process.env.API_URL || 'http://localhost:3001'}/api/platforms/twitter/oauth/callback`,
+            code_verifier: stateData.codeVerifier,
+          }),
+          {
+            headers: {
+              'Authorization': `Basic ${credentials}`,
+              'Content-Type': 'application/x-www-form-urlencoded',
+            },
+          }
+        );
+        
+        return {
+          accessToken: response.data.access_token,
+          refreshToken: response.data.refresh_token,
+          expiresAt: Date.now() + (response.data.expires_in * 1000),
+        };
+      }
+      
+      // Add more platform OAuth exchanges here
+      default:
+        // For platforms without OAuth or custom implementations
+        return {
+          accessToken: `token_${platformId}_${Date.now()}`,
+          expiresAt: Date.now() + 3600000, // 1 hour default
+        };
+    }
+  } catch (error) {
+    logger.error(`OAuth token exchange error for ${platformId}: ${error.message}`);
+    throw error;
+  }
 }
 
 module.exports = router;
-

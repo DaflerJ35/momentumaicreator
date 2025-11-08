@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
@@ -28,10 +28,32 @@ const ContentPublisher = () => {
   const [scheduleTime, setScheduleTime] = useState('');
   const [publishing, setPublishing] = useState(false);
   const [results, setResults] = useState([]);
+  const [connectedPlatforms, setConnectedPlatforms] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  const subscriptionPlatforms = getPlatformsByCategory('subscription');
-  const socialPlatforms = getPlatformsByCategory('social');
-  const blogPlatforms = getPlatformsByCategory('blog');
+  useEffect(() => {
+    loadConnectedPlatforms();
+  }, []);
+
+  const loadConnectedPlatforms = async () => {
+    try {
+      setLoading(true);
+      const response = await unifiedAPI.get('/platforms/connected');
+      if (response.success) {
+        setConnectedPlatforms(response.platforms.map(p => p.platformId));
+      }
+    } catch (error) {
+      console.error('Failed to load connected platforms:', error);
+      toast.error('Failed to load connected platforms');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Filter platforms to only show connected ones
+  const subscriptionPlatforms = getPlatformsByCategory('subscription').filter(p => connectedPlatforms.includes(p.id));
+  const socialPlatforms = getPlatformsByCategory('social').filter(p => connectedPlatforms.includes(p.id));
+  const blogPlatforms = getPlatformsByCategory('blog').filter(p => connectedPlatforms.includes(p.id));
 
   const allPlatforms = [...subscriptionPlatforms, ...socialPlatforms, ...blogPlatforms];
 
@@ -177,13 +199,18 @@ const ContentPublisher = () => {
             <Card className="glass-morphism border border-white/10">
               <CardHeader>
                 <CardTitle className="text-white">Select Platforms</CardTitle>
+                {connectedPlatforms.length === 0 && (
+                  <p className="text-sm text-amber-400 mt-2">
+                    No platforms connected. <a href="/integrations" className="underline">Connect platforms first</a>
+                  </p>
+                )}
               </CardHeader>
               <CardContent className="space-y-4 max-h-[600px] overflow-y-auto">
-                {/* Subscription Platforms */}
-                <div>
-                  <h3 className="text-sm font-semibold text-neon-violet mb-2">Subscription</h3>
-                  <div className="space-y-2">
-                    {subscriptionPlatforms.map((platform) => (
+                {subscriptionPlatforms.length > 0 && (
+                  <div>
+                    <h3 className="text-sm font-semibold text-neon-violet mb-2">Subscription</h3>
+                    <div className="space-y-2">
+                      {subscriptionPlatforms.map((platform) => (
                       <div key={platform.id} className="flex items-center space-x-2">
                         <Checkbox
                           id={platform.id}
@@ -197,16 +224,17 @@ const ContentPublisher = () => {
                           <span>{platform.icon}</span>
                           {platform.name}
                         </Label>
-                      </div>
-                    ))}
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                </div>
+                )}
 
-                {/* Social Media */}
-                <div>
-                  <h3 className="text-sm font-semibold text-neon-blue mb-2">Social Media</h3>
-                  <div className="space-y-2">
-                    {socialPlatforms.map((platform) => (
+                {socialPlatforms.length > 0 && (
+                  <div>
+                    <h3 className="text-sm font-semibold text-neon-blue mb-2">Social Media</h3>
+                    <div className="space-y-2">
+                      {socialPlatforms.map((platform) => (
                       <div key={platform.id} className="flex items-center space-x-2">
                         <Checkbox
                           id={platform.id}
@@ -220,16 +248,17 @@ const ContentPublisher = () => {
                           <span>{platform.icon}</span>
                           {platform.name}
                         </Label>
-                      </div>
-                    ))}
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                </div>
+                )}
 
-                {/* Blog Platforms */}
-                <div>
-                  <h3 className="text-sm font-semibold text-neon-magenta mb-2">Blogs</h3>
-                  <div className="space-y-2">
-                    {blogPlatforms.map((platform) => (
+                {blogPlatforms.length > 0 && (
+                  <div>
+                    <h3 className="text-sm font-semibold text-neon-magenta mb-2">Blogs</h3>
+                    <div className="space-y-2">
+                      {blogPlatforms.map((platform) => (
                       <div key={platform.id} className="flex items-center space-x-2">
                         <Checkbox
                           id={platform.id}
@@ -243,18 +272,19 @@ const ContentPublisher = () => {
                           <span>{platform.icon}</span>
                           {platform.name}
                         </Label>
-                      </div>
-                    ))}
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                </div>
+                )}
               </CardContent>
             </Card>
 
             {/* Publish Button */}
             <Button
               onClick={handlePublish}
-              disabled={publishing || !content.trim() || selectedPlatforms.length === 0}
-              className="w-full bg-gradient-to-r from-[hsl(200,100%,50%)] to-[hsl(280,85%,60%)] hover:from-[hsl(280,85%,60%)] hover:to-[hsl(320,90%,55%)] text-white"
+              disabled={publishing || !content.trim() || selectedPlatforms.length === 0 || connectedPlatforms.length === 0}
+              className="w-full bg-gradient-to-r from-[hsl(200,100%,50%)] to-[hsl(280,85%,60%)] hover:from-[hsl(280,85%,60%)] hover:to-[hsl(320,90%,55%)] text-white disabled:opacity-50"
               size="lg"
             >
               {publishing ? (

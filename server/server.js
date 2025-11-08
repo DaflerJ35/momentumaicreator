@@ -715,5 +715,14 @@ if (require.main === module) {
       env: process.env.NODE_ENV,
       port: PORT 
     });
+    
+    // Start scheduler service
+    try {
+      const schedulerService = require('./services/schedulerService');
+      schedulerService.startScheduler();
+      logger.info('Scheduler service started');
+    } catch (error) {
+      logger.error(`Failed to start scheduler: ${error.message}`);
+    }
   });
 }

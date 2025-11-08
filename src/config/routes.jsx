@@ -32,6 +32,7 @@ import {
 const LandingPage = lazy(() => import('../pages/general/LandingPage'));
 const Dashboard = lazy(() => import('../pages/general/Dashboard'));
 const Analytics = lazy(() => import('../pages/analytics/Analytics'));
+const PlatformAnalytics = lazy(() => import('../pages/analytics/PlatformAnalytics'));
 const SettingsPage = lazy(() => import('../pages/account/Settings'));
 const Billing = lazy(() => import('../pages/account/Billing'));
 const Pricing = lazy(() => import('../pages/pricing/Pricing'));
@@ -85,6 +86,13 @@ export const routes = [
     icon: BarChart3,
     showInNav: true,
     category: 'content',
+    protected: true
+  },
+  {
+    path: '/analytics/platforms',
+    element: PlatformAnalytics,
+    title: 'Platform Analytics',
+    showInNav: false,
     protected: true
   },
   {

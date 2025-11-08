@@ -1,14 +1,34 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
 import { PLATFORMS, getPlatformsByCategory, CATEGORIES } from '../../lib/platforms';
-import { Link2, Check, X, Settings, Globe } from 'lucide-react';
+import { unifiedAPI } from '../../lib/unifiedAPI';
+import { Link2, Check, X, Settings, Globe, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 const PlatformIntegrations = () => {
   const [connectedPlatforms, setConnectedPlatforms] = useState([]);
   const [connecting, setConnecting] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    loadConnectedPlatforms();
+  }, []);
+
+  const loadConnectedPlatforms = async () => {
+    try {
+      setLoading(true);
+      const response = await unifiedAPI.get('/platforms/connected');
+      if (response.success) {
+        setConnectedPlatforms(response.platforms.map(p => p.platformId));
+      }
+    } catch (error) {
+      console.error('Failed to load connected platforms:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const subscriptionPlatforms = getPlatformsByCategory('subscription');
   const socialPlatforms = getPlatformsByCategory('social');
@@ -17,17 +37,28 @@ const PlatformIntegrations = () => {
   const handleConnect = async (platformId) => {
     setConnecting(platformId);
     
-    // Simulate API connection
-    setTimeout(() => {
-      setConnectedPlatforms([...connectedPlatforms, platformId]);
+    try {
+      const response = await unifiedAPI.get(`/platforms/${platformId}/oauth/init`);
+      if (response.success && response.oauthUrl) {
+        // Redirect to OAuth URL
+        window.location.href = response.oauthUrl;
+      } else {
+        throw new Error('Failed to initialize OAuth');
+      }
+    } catch (error) {
+      toast.error(`Failed to connect ${PLATFORMS[platformId].name}: ${error.message}`);
       setConnecting(null);
-      toast.success(`${PLATFORMS[platformId].name} connected successfully!`);
-    }, 2000);
+    }
   };
 
-  const handleDisconnect = (platformId) => {
-    setConnectedPlatforms(connectedPlatforms.filter(id => id !== platformId));
-    toast.success(`${PLATFORMS[platformId].name} disconnected`);
+  const handleDisconnect = async (platformId) => {
+    try {
+      await unifiedAPI.delete(`/platforms/${platformId}`);
+      setConnectedPlatforms(connectedPlatforms.filter(id => id !== platformId));
+      toast.success(`${PLATFORMS[platformId].name} disconnected`);
+    } catch (error) {
+      toast.error(`Failed to disconnect ${PLATFORMS[platformId].name}: ${error.message}`);
+    }
   };
 
   const isConnected = (platformId) => connectedPlatforms.includes(platformId);
@@ -146,24 +177,59 @@ const PlatformIntegrations = () => {
           </p>
         </motion.div>
 
-        {/* Subscription Platforms */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-          className="mb-12"
-        >
-          <div className="flex items-center gap-3 mb-6">
-            <Globe className="h-6 w-6 text-neon-violet" />
-            <h2 className="text-2xl font-bold text-white">Subscription Platforms</h2>
-            <span className="text-sm text-slate-400">({subscriptionPlatforms.length} platforms)</span>
+        {/* Show connection status from URL params */}
+        {typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('connected') && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mb-6"
+          >
+            <div className="rounded-xl bg-emerald-500/10 border border-emerald-500/50 p-4">
+              <p className="text-emerald-400">
+                ✓ Successfully connected to {PLATFORMS[new URLSearchParams(window.location.search).get('connected')]?.name || 'platform'}
+              </p>
+            </div>
+          </motion.div>
+        )}
+
+        {typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('error') && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mb-6"
+          >
+            <div className="rounded-xl bg-red-500/10 border border-red-500/50 p-4">
+              <p className="text-red-400">
+                ✗ Connection failed: {new URLSearchParams(window.location.search).get('error')}
+              </p>
+            </div>
+          </motion.div>
+        )}
+
+        {loading ? (
+          <div className="flex items-center justify-center h-64">
+            <Loader2 className="h-8 w-8 animate-spin text-neon-blue" />
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {subscriptionPlatforms.map((platform) => (
-              <PlatformCard key={platform.id} platform={platform} />
-            ))}
-          </div>
-        </motion.div>
+        ) : (
+          <>
+            {/* Subscription Platforms */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.1 }}
+              className="mb-12"
+            >
+              <div className="flex items-center gap-3 mb-6">
+                <Globe className="h-6 w-6 text-neon-violet" />
+                <h2 className="text-2xl font-bold text-white">Subscription Platforms</h2>
+                <span className="text-sm text-slate-400">({subscriptionPlatforms.length} platforms)</span>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {subscriptionPlatforms.map((platform) => (
+                  <PlatformCard key={platform.id} platform={platform} />
+                ))}
+              </div>
+            </motion.div>
 
         {/* Social Media Platforms */}
         <motion.div
@@ -184,24 +250,26 @@ const PlatformIntegrations = () => {
           </div>
         </motion.div>
 
-        {/* Blog Platforms */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.3 }}
-          className="mb-12"
-        >
-          <div className="flex items-center gap-3 mb-6">
-            <Globe className="h-6 w-6 text-neon-magenta" />
-            <h2 className="text-2xl font-bold text-white">Blog Platforms</h2>
-            <span className="text-sm text-slate-400">({blogPlatforms.length} platforms)</span>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {blogPlatforms.map((platform) => (
-              <PlatformCard key={platform.id} platform={platform} />
-            ))}
-          </div>
-        </motion.div>
+            {/* Blog Platforms */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.3 }}
+              className="mb-12"
+            >
+              <div className="flex items-center gap-3 mb-6">
+                <Globe className="h-6 w-6 text-neon-magenta" />
+                <h2 className="text-2xl font-bold text-white">Blog Platforms</h2>
+                <span className="text-sm text-slate-400">({blogPlatforms.length} platforms)</span>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {blogPlatforms.map((platform) => (
+                  <PlatformCard key={platform.id} platform={platform} />
+                ))}
+              </div>
+            </motion.div>
+          </>
+        )}
       </div>
     </div>
   );
