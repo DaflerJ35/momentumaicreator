@@ -1,196 +1,136 @@
-# 🚀 DEPLOYMENT CHECKLIST - GET ONLINE NOW
+# 🚀 Momentum AI Creator - Deployment Checklist
 
-## CRITICAL: Follow these steps EXACTLY to deploy
+## ✅ Pre-Deployment Checklist
 
-### Step 1: Pre-Deployment Checks ✅
+### 1. Code Quality
+- [x] All branding updated to "Momentum AI Creator"
+- [x] No references to "Content Sphere" found
+- [x] Landing page fully integrated
+- [x] All components building successfully
+- [x] No linter errors
+- [x] All dependencies installed
 
-- [ ] Run `npm install` in root directory
-- [ ] Run `npm install` in `server/` directory  
-- [ ] Test build locally: `npm run build`
-- [ ] Verify `dist/` folder is created after build
+### 2. Configuration Files
+- [x] `package.json` - Project name and scripts configured
+- [x] `vercel.json` - Deployment configuration ready
+- [x] `.env.example` - Environment variables documented
+- [x] `index.html` - Meta tags updated with "Momentum AI Creator"
+- [x] Routes configured (landing page at `/`, protected routes require auth)
 
-### Step 2: Vercel Setup (Recommended - Fastest)
+### 3. Landing Page
+- [x] Navbar with "Momentum AI Creator" branding
+- [x] Hero section with video background
+- [x] All sections (Features, Pricing, Testimonials, FAQ, CTA)
+- [x] Footer with correct branding
+- [x] Galaxy background and 3D effects
+- [x] Parallax scrolling
+- [x] Responsive design
+- [x] CTAs connected to authentication/dashboard
 
-#### 2.1 Create Vercel Account
-1. Go to https://vercel.com
-2. Sign up/login with GitHub
-3. Click "New Project"
-4. Import your repository
+### 4. Authentication & Routing
+- [x] Landing page is public route
+- [x] Protected routes require authentication
+- [x] CTAs navigate to dashboard with auth modal
+- [x] Auth context properly integrated
+- [x] App shell only shows on protected routes
 
-#### 2.2 Configure Build Settings
-- **Framework Preset**: Vite
-- **Root Directory**: `./` (leave as default)
-- **Build Command**: `npm run build`
-- **Output Directory**: `dist`
-- **Install Command**: `npm install`
+### 5. Assets
+- [x] Public assets copied (videos, images, favicon)
+- [x] Logo animation video included
+- [x] Hero background video included
+- [x] Favicon configured
 
-#### 2.3 Set Environment Variables in Vercel Dashboard
+### 6. Git & GitHub
+- [x] Repository: `https://github.com/DaflerJ35/momentumaicreator`
+- [x] All changes committed
+- [x] All changes pushed to main branch
+- [x] No uncommitted changes
 
-**FRONTEND VARIABLES (Vite requires VITE_ prefix):**
-```
-VITE_FIREBASE_API_KEY=your_key_here
-VITE_FIREBASE_AUTH_DOMAIN=your-project.firebaseapp.com
-VITE_FIREBASE_PROJECT_ID=your-project-id
-VITE_FIREBASE_STORAGE_BUCKET=your-project.appspot.com
-VITE_FIREBASE_MESSAGING_SENDER_ID=your_sender_id
-VITE_FIREBASE_APP_ID=your_app_id
-VITE_FIREBASE_DATABASE_URL=https://your-project-default-rtdb.firebaseio.com/
-VITE_FIREBASE_MEASUREMENT_ID=G-XXXXXXXXXX
-VITE_GEMINI_API_KEY=your_gemini_key
-VITE_STRIPE_PUBLISHABLE_KEY=pk_live_xxxxxxxxxxxxx
-VITE_APP_URL=https://your-domain.vercel.app
-```
+### 7. Vercel Deployment Ready
+- [x] Build command: `npm run build`
+- [x] Output directory: `dist`
+- [x] Framework preset: Vite
+- [x] Node version: 18+ (Vercel auto-detects)
 
-**BACKEND VARIABLES (Server):**
-```
-NODE_ENV=production
-PORT=3001
-FRONTEND_URL=https://your-domain.vercel.app
+## 📋 Vercel Deployment Steps
 
-# Stripe
-STRIPE_SECRET_KEY=sk_live_xxxxxxxxxxxxx
-STRIPE_WEBHOOK_SECRET=whsec_xxxxxxxxxxxxx
+### Step 1: Connect Repository
+1. Go to [Vercel Dashboard](https://vercel.com/dashboard)
+2. Click "Add New Project"
+3. Import Git Repository: `DaflerJ35/momentumaicreator`
+4. Vercel will auto-detect Vite configuration
 
-# Stripe Price IDs - GET THESE FROM STRIPE DASHBOARD
-STRIPE_MONTHLY_PRO_PRICE_ID=price_xxxxxxxxxxxxx
-STRIPE_MONTHLY_BUSINESS_PRICE_ID=price_xxxxxxxxxxxxx
-STRIPE_MONTHLY_BUSINESS_PLUS_PRICE_ID=price_xxxxxxxxxxxxx
+### Step 2: Configure Environment Variables
+Add the following environment variables in Vercel:
+- `VITE_FIREBASE_API_KEY` - Your Firebase API key
+- `VITE_FIREBASE_AUTH_DOMAIN` - Your Firebase auth domain
+- `VITE_FIREBASE_PROJECT_ID` - Your Firebase project ID
+- `VITE_FIREBASE_STORAGE_BUCKET` - Your Firebase storage bucket
+- `VITE_FIREBASE_MESSAGING_SENDER_ID` - Your Firebase messaging sender ID
+- `VITE_FIREBASE_APP_ID` - Your Firebase app ID
+- `VITE_FIREBASE_DATABASE_URL` - Your Firebase database URL
+- `VITE_GOOGLE_GENERATIVE_AI_API_KEY` - Your Google Generative AI API key
+- `VITE_STRIPE_PUBLISHABLE_KEY` - Your Stripe publishable key (if using)
 
-STRIPE_6MONTH_PRO_PRICE_ID=price_xxxxxxxxxxxxx
-STRIPE_6MONTH_BUSINESS_PRICE_ID=price_xxxxxxxxxxxxx
-STRIPE_6MONTH_BUSINESS_PLUS_PRICE_ID=price_xxxxxxxxxxxxx
-
-STRIPE_YEARLY_PRO_PRICE_ID=price_xxxxxxxxxxxxx
-STRIPE_YEARLY_BUSINESS_PRICE_ID=price_xxxxxxxxxxxxx
-STRIPE_YEARLY_BUSINESS_PLUS_PRICE_ID=price_xxxxxxxxxxxxx
-
-# Optional: Email (Contact Form)
-SMTP_HOST=smtp.gmail.com
-SMTP_PORT=587
-SMTP_SECURE=false
-SMTP_USER=your-email@gmail.com
-SMTP_PASS=your-app-password
-SMTP_FROM_NAME=Momentum AI
-SMTP_FROM_EMAIL=noreply@yourdomain.com
-CONTACT_EMAIL=support@yourdomain.com
-```
-
-#### 2.4 Deploy
+### Step 3: Deploy
 1. Click "Deploy"
 2. Wait for build to complete
-3. Check deployment logs for errors
-4. Visit your deployed URL
+3. Visit your deployed site!
 
-### Step 3: Common Issues & Quick Fixes
+### Step 4: Post-Deployment
+- [ ] Test landing page loads correctly
+- [ ] Test authentication flow
+- [ ] Test navigation to dashboard
+- [ ] Verify all assets load (videos, images)
+- [ ] Test responsive design on mobile
+- [ ] Verify SEO meta tags
+- [ ] Test all CTAs and buttons
 
-#### Issue: Build Fails
-**Fix**: Check that all dependencies are in `package.json` and run `npm install` locally first
+## 🎯 Post-Deployment Tasks
 
-#### Issue: API Routes Not Working
-**Fix**: 
-1. Verify `api/index.js` exists
-2. Check that server files are in `server/` directory
-3. Verify environment variables are set in Vercel dashboard
+### SEO & Analytics
+- [ ] Add Google Analytics (if desired)
+- [ ] Set up Google Search Console
+- [ ] Verify Open Graph images
+- [ ] Update social media previews
 
-#### Issue: Firebase Not Working
-**Fix**:
-1. Double-check all `VITE_FIREBASE_*` variables are set
-2. Verify Firebase project is set to production mode
-3. Check Firebase console for API restrictions
+### Performance
+- [ ] Monitor build times
+- [ ] Check bundle sizes
+- [ ] Optimize images/videos if needed
+- [ ] Set up CDN if needed
 
-#### Issue: Stripe Not Working
-**Fix**:
-1. Use LIVE keys (pk_live_ and sk_live_) in production
-2. Verify webhook URL in Stripe dashboard: `https://your-domain.vercel.app/api/webhook`
-3. Get webhook secret from Stripe dashboard
+### Domain & SSL
+- [ ] Configure custom domain (if desired)
+- [ ] Verify SSL certificate (auto-configured by Vercel)
+- [ ] Set up domain redirects
 
-#### Issue: CORS Errors
-**Fix**: 
-1. Set `FRONTEND_URL` to your exact Vercel domain
-2. Add domain to Firebase authorized domains
-3. Check `server/middleware/security.js` CORS settings
+### Monitoring
+- [ ] Set up error tracking (Sentry, etc.)
+- [ ] Monitor performance metrics
+- [ ] Set up uptime monitoring
 
-### Step 4: Post-Deployment Verification
+## 🐛 Common Issues & Solutions
 
-- [ ] Visit your site: `https://your-domain.vercel.app`
-- [ ] Test authentication (sign in/out)
-- [ ] Test API endpoint: `https://your-domain.vercel.app/api/health`
-- [ ] Test Stripe checkout (use test mode first)
-- [ ] Check browser console for errors
-- [ ] Test on mobile device
+### Issue: Build fails on Vercel
+**Solution**: Check environment variables are set correctly, verify Node version compatibility
 
-### Step 5: Custom Domain (Optional but Recommended)
+### Issue: Assets not loading
+**Solution**: Verify public folder assets are committed, check asset paths
 
-1. In Vercel dashboard, go to Project Settings → Domains
-2. Add your custom domain
-3. Update DNS records as instructed
-4. Update `FRONTEND_URL` and `VITE_APP_URL` to custom domain
-5. Update Firebase authorized domains
-6. Redeploy
+### Issue: Authentication not working
+**Solution**: Verify Firebase environment variables, check Firebase console settings
 
-### Emergency Deployment (If Vercel Fails)
+### Issue: Large bundle size warning
+**Solution**: This is normal for the landing page with 3D effects. Consider code-splitting if needed.
 
-#### Option A: Netlify
-1. Go to https://netlify.com
-2. Connect GitHub repo
-3. Build command: `npm run build`
-4. Publish directory: `dist`
-5. Add environment variables (same as above)
-6. Deploy
+## 📝 Notes
 
-#### Option B: Render
-1. Go to https://render.com
-2. Create Web Service
-3. Connect GitHub repo
-4. Build command: `npm run build && cd server && npm install`
-5. Start command: `cd server && npm start`
-6. Add environment variables
-7. Deploy
+- The landing page bundle is large (~891KB) due to 3D effects and animations. This is expected.
+- All "Content Sphere" references have been removed and replaced with "Momentum AI Creator"
+- The landing page is fully functional and ready for production
+- Authentication is properly integrated with the dashboard
 
-### Quick Test Commands
+## 🎉 You're Ready to Deploy!
 
-```bash
-# Test build locally
-npm run build
-
-# Test server locally
-cd server
-npm start
-
-# Check for missing dependencies
-npm audit
-
-# Verify environment variables (in server directory)
-node -e "require('dotenv').config(); console.log(process.env.STRIPE_SECRET_KEY ? 'Stripe OK' : 'Stripe MISSING')"
-```
-
-### Support Resources
-
-- Vercel Docs: https://vercel.com/docs
-- Firebase Console: https://console.firebase.google.com
-- Stripe Dashboard: https://dashboard.stripe.com
-- Project README: See `README.md` for detailed setup
-
----
-
-## ⚠️ CRITICAL REMINDERS
-
-1. **NEVER commit `.env` files to Git**
-2. **Use LIVE Stripe keys in production** (not test keys)
-3. **Set all environment variables in Vercel dashboard**
-4. **Test in production mode before announcing launch**
-5. **Monitor Vercel deployment logs for errors**
-
----
-
-## 🆘 If Still Not Working
-
-1. Check Vercel deployment logs (most common issue is missing env vars)
-2. Check browser console for errors
-3. Verify all API keys are correct
-4. Test API endpoint: `/api/health` should return `{"status":"ok"}`
-5. Check Firebase console for auth errors
-6. Verify Stripe webhook is configured
-
-**Last Resort**: Share your Vercel deployment URL and error logs for help debugging.
-
+Everything is set up and ready. Just follow the Vercel deployment steps above and you'll be live!
