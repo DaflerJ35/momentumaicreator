@@ -1,11 +1,15 @@
 import { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
 import { PLATFORMS, getPlatformsByCategory, CATEGORIES } from '../../lib/platforms';
 import { unifiedAPI } from '../../lib/unifiedAPI';
 import { Link2, Check, X, Settings, Globe, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { StaggerContainer, StaggerItem } from '../../components/animations/StaggerChildren';
+import { FloatingElement, PulsingElement } from '../../components/animations/FloatingElements';
+import RevealOnScroll from '../../components/animations/RevealOnScroll';
+import AnimatedButton from '../../components/ui/AnimatedButton';
 
 const PlatformIntegrations = () => {
   const [connectedPlatforms, setConnectedPlatforms] = useState([]);
@@ -68,30 +72,50 @@ const PlatformIntegrations = () => {
     const connectingNow = connecting === platform.id;
 
     return (
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        whileInView={{ opacity: 1, y: 0 }}
-        viewport={{ once: true }}
-        whileHover={{ y: -4, scale: 1.02 }}
-        className="relative"
-      >
-        <Card className="glass-morphism border border-white/10 hover:border-neon-blue/50 transition-all h-full">
-          <CardContent className="p-6">
-            <div className="flex items-start justify-between mb-4">
-              <div className="flex items-center gap-3">
-                <div className="text-4xl">{platform.icon}</div>
-                <div>
-                  <h3 className="text-lg font-bold text-white">{platform.name}</h3>
-                  <p className="text-xs text-slate-400">{platform.category}</p>
+      <StaggerItem>
+        <motion.div
+          whileHover={{ 
+            y: -8, 
+            scale: 1.03,
+            transition: { type: 'spring', stiffness: 400, damping: 25 }
+          }}
+          whileTap={{ scale: 0.98 }}
+          className="relative"
+        >
+          <Card className="glass-morphism border border-white/10 hover:border-[hsl(200,100%,50%)]/50 transition-all h-full shadow-xl hover:shadow-2xl hover:shadow-[hsl(200,100%,50%)]/20 group">
+            <CardContent className="p-6">
+              <div className="flex items-start justify-between mb-4">
+                <div className="flex items-center gap-3">
+                  <FloatingElement duration={2.5}>
+                    <motion.div 
+                      className="text-4xl"
+                      whileHover={{ 
+                        rotate: [0, -10, 10, -10, 0],
+                        scale: 1.2 
+                      }}
+                      transition={{ duration: 0.5 }}
+                    >
+                      {platform.icon}
+                    </motion.div>
+                  </FloatingElement>
+                  <div>
+                    <h3 className="text-lg font-bold text-white group-hover:text-[hsl(200,100%,50%)] transition-colors">{platform.name}</h3>
+                    <p className="text-xs text-slate-400">{platform.category}</p>
+                  </div>
                 </div>
+                {connected && (
+                  <PulsingElement scale={1.1}>
+                    <motion.div 
+                      className="flex items-center gap-2 text-emerald-400"
+                      animate={{ scale: [1, 1.1, 1] }}
+                      transition={{ duration: 2, repeat: Infinity }}
+                    >
+                      <Check className="h-5 w-5" />
+                      <span className="text-sm font-medium">Connected</span>
+                    </motion.div>
+                  </PulsingElement>
+                )}
               </div>
-              {connected && (
-                <div className="flex items-center gap-2 text-emerald-400">
-                  <Check className="h-5 w-5" />
-                  <span className="text-sm font-medium">Connected</span>
-                </div>
-              )}
-            </div>
 
             <div className="mb-4">
               <p className="text-sm text-slate-300 mb-2">Features:</p>
@@ -213,61 +237,52 @@ const PlatformIntegrations = () => {
         ) : (
           <>
             {/* Subscription Platforms */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.1 }}
-              className="mb-12"
-            >
+            <RevealOnScroll delay={0.1} className="mb-12">
               <div className="flex items-center gap-3 mb-6">
-                <Globe className="h-6 w-6 text-neon-violet" />
+                <FloatingElement>
+                  <Globe className="h-6 w-6 text-neon-violet" />
+                </FloatingElement>
                 <h2 className="text-2xl font-bold text-white">Subscription Platforms</h2>
                 <span className="text-sm text-slate-400">({subscriptionPlatforms.length} platforms)</span>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              <StaggerContainer className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {subscriptionPlatforms.map((platform) => (
                   <PlatformCard key={platform.id} platform={platform} />
                 ))}
-              </div>
-            </motion.div>
+              </StaggerContainer>
+            </RevealOnScroll>
 
         {/* Social Media Platforms */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
-          className="mb-12"
-        >
+        <RevealOnScroll delay={0.2} className="mb-12">
           <div className="flex items-center gap-3 mb-6">
-            <Globe className="h-6 w-6 text-neon-blue" />
+            <FloatingElement>
+              <Globe className="h-6 w-6 text-neon-blue" />
+            </FloatingElement>
             <h2 className="text-2xl font-bold text-white">Social Media Platforms</h2>
             <span className="text-sm text-slate-400">({socialPlatforms.length} platforms)</span>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <StaggerContainer className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {socialPlatforms.map((platform) => (
               <PlatformCard key={platform.id} platform={platform} />
             ))}
-          </div>
-        </motion.div>
+          </StaggerContainer>
+        </RevealOnScroll>
 
             {/* Blog Platforms */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.3 }}
-              className="mb-12"
-            >
+            <RevealOnScroll delay={0.3} className="mb-12">
               <div className="flex items-center gap-3 mb-6">
-                <Globe className="h-6 w-6 text-neon-magenta" />
+                <FloatingElement>
+                  <Globe className="h-6 w-6 text-neon-magenta" />
+                </FloatingElement>
                 <h2 className="text-2xl font-bold text-white">Blog Platforms</h2>
                 <span className="text-sm text-slate-400">({blogPlatforms.length} platforms)</span>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              <StaggerContainer className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {blogPlatforms.map((platform) => (
                   <PlatformCard key={platform.id} platform={platform} />
                 ))}
-              </div>
-            </motion.div>
+              </StaggerContainer>
+            </RevealOnScroll>
           </>
         )}
       </div>
