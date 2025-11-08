@@ -1,12 +1,17 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Card, CardContent } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
 import { useAuth } from '../../contexts/AuthContext';
 import { PLATFORMS, getPlatformsByCategory } from '../../lib/platforms';
 import { unifiedAPI } from '../../lib/unifiedAPI';
+import { StaggerContainer, StaggerItem } from '../../components/animations/StaggerChildren';
+import { FloatingElement, PulsingElement } from '../../components/animations/FloatingElements';
+import { ShimmerText } from '../../components/animations/ShimmerEffect';
+import RevealOnScroll from '../../components/animations/RevealOnScroll';
+import AnimatedButton from '../../components/ui/AnimatedButton';
 import { 
   TrendingUp, 
   FileText, 
@@ -283,20 +288,22 @@ const Dashboard = () => {
         </div>
       </motion.div>
 
-      {/* KPI Cards - Using Landing Page Colors */}
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4 mb-8">
+      {/* KPI Cards - Using Landing Page Colors with Premium Animations */}
+      <StaggerContainer className="grid gap-6 md:grid-cols-2 lg:grid-cols-4 mb-8">
         {kpis.map((kpi, index) => {
           const Icon = kpi.icon;
           return (
-            <motion.div
-              key={kpi.title}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.4, delay: index * 0.1 }}
-              whileHover={{ y: -4, scale: 1.02 }}
-              className="group"
-            >
-              <div className="relative overflow-hidden rounded-2xl glass-morphism border border-white/10 p-6 hover:border-neon-blue/50 transition-all shadow-xl">
+            <StaggerItem key={kpi.title}>
+              <motion.div
+                whileHover={{ 
+                  y: -8, 
+                  scale: 1.03,
+                  transition: { type: 'spring', stiffness: 300, damping: 20 }
+                }}
+                whileTap={{ scale: 0.98 }}
+                className="group cursor-pointer"
+              >
+                <div className="relative overflow-hidden rounded-2xl glass-morphism border border-white/10 p-6 hover:border-[hsl(200,100%,50%)]/50 transition-all shadow-xl hover:shadow-2xl hover:shadow-[hsl(200,100%,50%)]/20">
                 {/* Animated gradient overlay */}
                 <div className={`absolute inset-0 bg-gradient-to-br ${kpi.gradient} opacity-0 group-hover:opacity-10 transition-opacity duration-500`} />
                 
@@ -371,85 +378,133 @@ const Dashboard = () => {
         </div>
 
         {/* Subscription Platforms */}
-        <div className="mb-6">
-          <h3 className="text-lg font-semibold text-neon-violet mb-4">Subscription Platforms</h3>
-          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
-            {subscriptionPlatforms.map((platform) => (
-              <motion.div
-                key={platform.id}
-                whileHover={{ scale: 1.05, y: -4 }}
-                onClick={() => navigate('/integrations')}
-                className="rounded-xl glass-morphism border border-white/10 hover:border-neon-violet/50 p-4 cursor-pointer transition-all group"
-              >
-                <div className="text-3xl mb-2">{platform.icon}</div>
-                <div className="text-sm font-semibold text-white group-hover:text-neon-violet transition-colors">
-                  {platform.name}
-                </div>
-                <div className="text-xs mt-1">
-                  {connectedPlatforms.includes(platform.id) ? (
-                    <span className="text-emerald-400">✓ Connected</span>
-                  ) : (
-                    <span className="text-slate-400">Not connected</span>
-                  )}
-                </div>
-              </motion.div>
-            ))}
+        <RevealOnScroll delay={0.3}>
+          <div className="mb-6">
+            <h3 className="text-lg font-semibold text-neon-violet mb-4">Subscription Platforms</h3>
+            <StaggerContainer className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+              {subscriptionPlatforms.map((platform, index) => (
+                <StaggerItem key={platform.id}>
+                  <motion.div
+                    whileHover={{ 
+                      scale: 1.1, 
+                      y: -6,
+                      rotate: [0, -2, 2, 0],
+                    }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={() => navigate('/integrations')}
+                    className="rounded-xl glass-morphism border border-white/10 hover:border-neon-violet/50 p-4 cursor-pointer transition-all group shadow-lg hover:shadow-xl hover:shadow-neon-violet/20"
+                  >
+                    <FloatingElement duration={2 + index * 0.1}>
+                      <div className="text-3xl mb-2">{platform.icon}</div>
+                    </FloatingElement>
+                    <div className="text-sm font-semibold text-white group-hover:text-neon-violet transition-colors">
+                      {platform.name}
+                    </div>
+                    <div className="text-xs mt-1">
+                      {connectedPlatforms.includes(platform.id) ? (
+                        <motion.span 
+                          className="text-emerald-400 flex items-center gap-1"
+                          animate={{ scale: [1, 1.2, 1] }}
+                          transition={{ duration: 2, repeat: Infinity, repeatDelay: 5 }}
+                        >
+                          ✓ Connected
+                        </motion.span>
+                      ) : (
+                        <span className="text-slate-400">Not connected</span>
+                      )}
+                    </div>
+                  </motion.div>
+                </StaggerItem>
+              ))}
+            </StaggerContainer>
           </div>
-        </div>
+        </RevealOnScroll>
 
         {/* Social Media Platforms */}
-        <div className="mb-6">
-          <h3 className="text-lg font-semibold text-neon-blue mb-4">Social Media</h3>
-          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
-            {socialPlatforms.slice(0, 12).map((platform) => (
-              <motion.div
-                key={platform.id}
-                whileHover={{ scale: 1.05, y: -4 }}
-                onClick={() => navigate('/integrations')}
-                className="rounded-xl glass-morphism border border-white/10 hover:border-neon-blue/50 p-4 cursor-pointer transition-all group"
-              >
-                <div className="text-3xl mb-2">{platform.icon}</div>
-                <div className="text-sm font-semibold text-white group-hover:text-neon-blue transition-colors">
-                  {platform.name}
-                </div>
-                <div className="text-xs mt-1">
-                  {connectedPlatforms.includes(platform.id) ? (
-                    <span className="text-emerald-400">✓ Connected</span>
-                  ) : (
-                    <span className="text-slate-400">Not connected</span>
-                  )}
-                </div>
-              </motion.div>
-            ))}
+        <RevealOnScroll delay={0.4}>
+          <div className="mb-6">
+            <h3 className="text-lg font-semibold text-neon-blue mb-4">Social Media</h3>
+            <StaggerContainer className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+              {socialPlatforms.slice(0, 12).map((platform, index) => (
+                <StaggerItem key={platform.id}>
+                  <motion.div
+                    whileHover={{ 
+                      scale: 1.1, 
+                      y: -6,
+                      rotate: [0, -2, 2, 0],
+                    }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={() => navigate('/integrations')}
+                    className="rounded-xl glass-morphism border border-white/10 hover:border-neon-blue/50 p-4 cursor-pointer transition-all group shadow-lg hover:shadow-xl hover:shadow-neon-blue/20"
+                  >
+                    <FloatingElement duration={2 + index * 0.1}>
+                      <div className="text-3xl mb-2">{platform.icon}</div>
+                    </FloatingElement>
+                    <div className="text-sm font-semibold text-white group-hover:text-neon-blue transition-colors">
+                      {platform.name}
+                    </div>
+                    <div className="text-xs mt-1">
+                      {connectedPlatforms.includes(platform.id) ? (
+                        <motion.span 
+                          className="text-emerald-400 flex items-center gap-1"
+                          animate={{ scale: [1, 1.2, 1] }}
+                          transition={{ duration: 2, repeat: Infinity, repeatDelay: 5 }}
+                        >
+                          ✓ Connected
+                        </motion.span>
+                      ) : (
+                        <span className="text-slate-400">Not connected</span>
+                      )}
+                    </div>
+                  </motion.div>
+                </StaggerItem>
+              ))}
+            </StaggerContainer>
           </div>
-        </div>
+        </RevealOnScroll>
 
         {/* Blog Platforms */}
-        <div>
-          <h3 className="text-lg font-semibold text-neon-magenta mb-4">Blog Platforms</h3>
-          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
-            {blogPlatforms.map((platform) => (
-              <motion.div
-                key={platform.id}
-                whileHover={{ scale: 1.05, y: -4 }}
-                onClick={() => navigate('/integrations')}
-                className="rounded-xl glass-morphism border border-white/10 hover:border-neon-magenta/50 p-4 cursor-pointer transition-all group"
-              >
-                <div className="text-3xl mb-2">{platform.icon}</div>
-                <div className="text-sm font-semibold text-white group-hover:text-neon-magenta transition-colors">
-                  {platform.name}
-                </div>
-                <div className="text-xs mt-1">
-                  {connectedPlatforms.includes(platform.id) ? (
-                    <span className="text-emerald-400">✓ Connected</span>
-                  ) : (
-                    <span className="text-slate-400">Not connected</span>
-                  )}
-                </div>
-              </motion.div>
-            ))}
+        <RevealOnScroll delay={0.5}>
+          <div>
+            <h3 className="text-lg font-semibold text-neon-magenta mb-4">Blog Platforms</h3>
+            <StaggerContainer className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+              {blogPlatforms.map((platform, index) => (
+                <StaggerItem key={platform.id}>
+                  <motion.div
+                    whileHover={{ 
+                      scale: 1.1, 
+                      y: -6,
+                      rotate: [0, -2, 2, 0],
+                    }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={() => navigate('/integrations')}
+                    className="rounded-xl glass-morphism border border-white/10 hover:border-neon-magenta/50 p-4 cursor-pointer transition-all group shadow-lg hover:shadow-xl hover:shadow-neon-magenta/20"
+                  >
+                    <FloatingElement duration={2 + index * 0.1}>
+                      <div className="text-3xl mb-2">{platform.icon}</div>
+                    </FloatingElement>
+                    <div className="text-sm font-semibold text-white group-hover:text-neon-magenta transition-colors">
+                      {platform.name}
+                    </div>
+                    <div className="text-xs mt-1">
+                      {connectedPlatforms.includes(platform.id) ? (
+                        <motion.span 
+                          className="text-emerald-400 flex items-center gap-1"
+                          animate={{ scale: [1, 1.2, 1] }}
+                          transition={{ duration: 2, repeat: Infinity, repeatDelay: 5 }}
+                        >
+                          ✓ Connected
+                        </motion.span>
+                      ) : (
+                        <span className="text-slate-400">Not connected</span>
+                      )}
+                    </div>
+                  </motion.div>
+                </StaggerItem>
+              ))}
+            </StaggerContainer>
           </div>
-        </div>
+        </RevealOnScroll>
       </motion.div>
 
       {/* Quick Actions */}
