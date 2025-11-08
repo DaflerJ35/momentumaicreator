@@ -86,7 +86,7 @@ const groupRoutesBySection = (routes) => {
 
 const NavItem = ({ item, isCollapsed, isActive, onClick }) => {
   if (!item.showInNav) return null;
-  // Use the provided icon or fall back to Home icon if none provided
+  
   const Icon = item.icon || Home;
   
   return (
@@ -105,30 +105,31 @@ const NavItem = ({ item, isCollapsed, isActive, onClick }) => {
         } ${isCollapsed ? 'justify-center' : ''}`}
         title={isCollapsed ? item.title : ''}
       >
-      <Icon
-        className={`flex-shrink-0 ${
-          isActive 
-            ? 'text-emerald-400' 
-            : 'text-slate-400 group-hover:text-emerald-400'
-        } ${isCollapsed ? 'h-5 w-5' : 'mr-3 h-5 w-5'}`}
-        aria-hidden="true"
-      />
-      {!isCollapsed && (
-        <span className="truncate">{item.title}</span>
-      )}
-      {isActive && !isCollapsed && (
-        <motion.span
-          layoutId="sidebar-active"
-          className="absolute right-4 w-1.5 h-6 bg-emerald-500 rounded-full"
-          initial={false}
-          transition={{
-            type: 'spring',
-            stiffness: 500,
-            damping: 30
-          }}
+        <Icon
+          className={`flex-shrink-0 ${
+            isActive 
+              ? 'text-emerald-400' 
+              : 'text-slate-400 group-hover:text-emerald-400'
+          } ${isCollapsed ? 'h-5 w-5' : 'mr-3 h-5 w-5'}`}
+          aria-hidden="true"
         />
-      )}
-    </Link>
+        {!isCollapsed && (
+          <span className="truncate">{item.title}</span>
+        )}
+        {isActive && !isCollapsed && (
+          <motion.span
+            layoutId="sidebar-active"
+            className="absolute right-4 w-1.5 h-6 bg-emerald-500 rounded-full"
+            initial={false}
+            transition={{
+              type: 'spring',
+              stiffness: 500,
+              damping: 30
+            }}
+          />
+        )}
+      </Link>
+    </motion.div>
   );
 };
 
@@ -157,7 +158,7 @@ const Sidebar = ({ isOpen, onToggle, routes = [] }) => {
   };
   
   const toggleSection = (sectionId) => {
-    setActiveSection(activeSection === sectionId ? null : sectionId);
+    setActiveSection(activeSection === sectionId ? '' : sectionId);
   };
   
   const toggleCollapse = () => {
@@ -236,7 +237,7 @@ const Sidebar = ({ isOpen, onToggle, routes = [] }) => {
                 <div className="mt-1 space-y-1">
                   {section.items.map((item) => {
                     const isActive = location.pathname === item.path;
-                    const Icon = item.icon || HomeIcon;
+                    const Icon = item.icon || Home;
                     
                     return (
                       <NavItem
