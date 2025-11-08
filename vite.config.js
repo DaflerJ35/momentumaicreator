@@ -91,7 +91,31 @@ export default defineConfig(({ mode }) => {
     },
     build: {
       outDir: 'dist',
-      sourcemap: true,
+      sourcemap: false, // Disable in production for better performance
+      // Code splitting optimization
+      rollupOptions: {
+        output: {
+          manualChunks: {
+            'react-vendor': ['react', 'react-dom', 'react-router-dom'],
+            'animation-vendor': ['framer-motion'],
+            'ui-vendor': ['lucide-react'],
+            'firebase-vendor': ['firebase/app', 'firebase/auth', 'firebase/database'],
+            'chart-vendor': ['recharts'],
+          },
+        },
+      },
+      chunkSizeWarningLimit: 1000,
+      minify: 'terser',
+      terserOptions: {
+        compress: {
+          drop_console: true, // Remove console.logs in production
+          drop_debugger: true,
+        },
+      },
+    },
+    // Optimize dependencies
+    optimizeDeps: {
+      include: ['react', 'react-dom', 'react-router-dom', 'framer-motion', 'lucide-react'],
     },
     // Only pass through VITE_ prefixed environment variables to the client
     // This is the default behavior, but we're being explicit here

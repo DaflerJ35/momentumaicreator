@@ -12,6 +12,8 @@ import { FloatingElement, PulsingElement } from '../../components/animations/Flo
 import { ShimmerText } from '../../components/animations/ShimmerEffect';
 import RevealOnScroll from '../../components/animations/RevealOnScroll';
 import AnimatedButton from '../../components/ui/AnimatedButton';
+import { RichTooltip } from '../../components/ui/RichTooltip';
+import useKeyboardShortcuts from '../../hooks/useKeyboardShortcuts';
 import { 
   TrendingUp, 
   FileText, 
@@ -50,6 +52,35 @@ const Dashboard = () => {
   const [idea, setIdea] = useState('');
   const [analysis, setAnalysis] = useState(null);
   const [loading, setLoading] = useState(false);
+
+  // Keyboard shortcuts
+  useKeyboardShortcuts([
+    {
+      key: 'meta+k',
+      action: () => {
+        // Command palette will be triggered by CommandPalette component
+      },
+      allowInInputs: true,
+    },
+    {
+      key: 'meta+/',
+      action: () => {
+        navigate('/ai-tools');
+      },
+    },
+    {
+      key: 'meta+p',
+      action: () => {
+        navigate('/publish');
+      },
+    },
+    {
+      key: 'meta+i',
+      action: () => {
+        navigate('/integrations');
+      },
+    },
+  ]);
 
   const kpis = [
     { 
