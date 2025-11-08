@@ -278,6 +278,8 @@ const aiService = require('./services/aiService');
 // Import route modules
 const teamRoutes = require('./routes/teams');
 const multimediaRoutes = require('./routes/multimedia');
+const platformRoutes = require('./routes/platforms');
+const blogRoutes = require('./routes/blog');
 
 // AI API Endpoints
 // Generate content
@@ -488,6 +490,8 @@ app.get('/api/ai/models', (req, res) => {
 // Register team and multimedia routes
 app.use('/api/teams', teamRoutes);
 app.use('/api/multimedia', multimediaRoutes);
+app.use('/api/platforms', platformRoutes);
+app.use('/api/blog', blogRoutes);
 
 // Marketplace checkout endpoint
 app.post('/api/marketplace/checkout', async (req, res) => {

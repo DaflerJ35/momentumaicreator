@@ -25,6 +25,7 @@ import {
   History,
   TestTube2,
   Link2,
+  Send,
 } from 'lucide-react';
 
 // Lazy load page components
@@ -58,6 +59,7 @@ const Marketplace = lazy(() => import('../pages/growth/Marketplace'));
 const Referrals = lazy(() => import('../pages/growth/Referrals'));
 const TeamManagement = lazy(() => import('../pages/team/TeamManagement'));
 const PlatformIntegrations = lazy(() => import('../pages/integrations/PlatformIntegrations'));
+const ContentPublisher = lazy(() => import('../pages/content/ContentPublisher'));
 
 export const routes = [
   {
@@ -318,6 +320,15 @@ export const routes = [
     element: PlatformIntegrations,
     title: 'Integrations',
     icon: Link2,
+    showInNav: true,
+    category: 'main',
+    protected: true
+  },
+  {
+    path: '/publish',
+    element: ContentPublisher,
+    title: 'Publish',
+    icon: Send,
     showInNav: true,
     category: 'main',
     protected: true

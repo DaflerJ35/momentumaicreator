@@ -245,9 +245,223 @@ export async function healthCheck() {
   }
 }
 
+/**
+ * Platform API - Platform integrations and posting
+ */
+export const platformAPI = {
+  /**
+   * Initialize OAuth for a platform
+   */
+  async initOAuth(platformId) {
+    const response = await apiRequest(`/api/platforms/${platformId}/oauth/init`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${await getAuthToken()}`,
+      },
+    });
+    return response.json();
+  },
+
+  /**
+   * Get connected platforms
+   */
+  async getConnectedPlatforms() {
+    const response = await apiRequest('/api/platforms/connected', {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${await getAuthToken()}`,
+      },
+    });
+    return response.json();
+  },
+
+  /**
+   * Disconnect a platform
+   */
+  async disconnectPlatform(platformId) {
+    const response = await apiRequest(`/api/platforms/${platformId}`, {
+      method: 'DELETE',
+      headers: {
+        'Authorization': `Bearer ${await getAuthToken()}`,
+      },
+    });
+    return response.json();
+  },
+
+  /**
+   * Post to a platform
+   */
+  async post(platformId, { content, media, scheduleTime, options }) {
+    const response = await apiRequest(`/api/platforms/${platformId}/post`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${await getAuthToken()}`,
+      },
+      body: JSON.stringify({ content, media, scheduleTime, options }),
+    });
+    return response.json();
+  },
+
+  /**
+   * Schedule content to multiple platforms
+   */
+  async schedule({ platforms, content, media, scheduleTime, options }) {
+    const response = await apiRequest('/api/platforms/schedule', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${await getAuthToken()}`,
+      },
+      body: JSON.stringify({ platforms, content, media, scheduleTime, options }),
+    });
+    return response.json();
+  },
+
+  /**
+   * Get platform analytics
+   */
+  async getAnalytics(platformId, { startDate, endDate }) {
+    const params = new URLSearchParams();
+    if (startDate) params.append('startDate', startDate);
+    if (endDate) params.append('endDate', endDate);
+    
+    const response = await apiRequest(`/api/platforms/${platformId}/analytics?${params}`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${await getAuthToken()}`,
+      },
+    });
+    return response.json();
+  },
+};
+
+/**
+ * Blog API - Blog platform posting
+ */
+export const blogAPI = {
+  /**
+   * Post to WordPress
+   */
+  async postToWordPress({ title, content, categories, tags, featuredImage, status }) {
+    const response = await apiRequest('/api/blog/wordpress', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${await getAuthToken()}`,
+      },
+      body: JSON.stringify({ title, content, categories, tags, featuredImage, status }),
+    });
+    return response.json();
+  },
+
+  /**
+   * Post to Medium
+   */
+  async postToMedium({ title, content, tags, publishStatus }) {
+    const response = await apiRequest('/api/blog/medium', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${await getAuthToken()}`,
+      },
+      body: JSON.stringify({ title, content, tags, publishStatus }),
+    });
+    return response.json();
+  },
+
+  /**
+   * Post to Substack
+   */
+  async postToSubstack({ title, body, subtitle, sendEmail }) {
+    const response = await apiRequest('/api/blog/substack', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${await getAuthToken()}`,
+      },
+      body: JSON.stringify({ title, body, subtitle, sendEmail }),
+    });
+    return response.json();
+  },
+
+  /**
+   * Post to Ghost
+   */
+  async postToGhost({ title, html, tags, featured, status }) {
+    const response = await apiRequest('/api/blog/ghost', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${await getAuthToken()}`,
+      },
+      body: JSON.stringify({ title, html, tags, featured, status }),
+    });
+    return response.json();
+  },
+};
+
+/**
+ * Get Firebase auth token
+ */
+async function getAuthToken() {
+  const { auth } = await import('../lib/firebase');
+  const user = auth.currentUser;
+  if (!user) {
+    throw new Error('User not authenticated');
+  }
+  return await user.getIdToken();
+}
+
+/**
+ * Unified API client with all methods
+ */
+export const unifiedAPI = {
+  get: async (endpoint, options = {}) => {
+    const url = endpoint.startsWith('http') ? endpoint : `${API_URL}${endpoint}`;
+    const token = await getAuthToken().catch(() => null);
+    
+    const response = await fetch(url, {
+      ...options,
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token && { 'Authorization': `Bearer ${token}` }),
+        ...options.headers,
+      },
+    });
+    
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ error: 'Request failed' }));
+      throw new Error(error.error || `Request failed: ${response.statusText}`);
+    }
+    
+    return response.json();
+  },
+  
+  post: async (endpoint, data, options = {}) => {
+    const url = endpoint.startsWith('http') ? endpoint : `${API_URL}${endpoint}`;
+    const token = await getAuthToken().catch(() => null);
+    
+    const response = await fetch(url, {
+      ...options,
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token && { 'Authorization': `Bearer ${token}` }),
+        ...options.headers,
+      },
+      body: JSON.stringify(data),
+    });
+    
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ error: 'Request failed' }));
+      throw new Error(error.error || `Request failed: ${response.statusText}`);
+    }
+    
+    return response.json();
+  },
+};
+
 export default {
   ai: aiAPI,
   media: mediaAPI,
+  platform: platformAPI,
+  blog: blogAPI,
   healthCheck,
 };
 
