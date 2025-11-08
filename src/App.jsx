@@ -69,7 +69,8 @@ function AppContent() {
   const protectedRoutes = routes.filter(route => route.protected);
 
   // Check if the current route is public
-  const isPublicRoute = publicRoutes.some(route => 
+  // Root route (/) should use app shell (treated as protected route)
+  const isPublicRoute = location.pathname !== '/' && publicRoutes.some(route => 
     route.path === location.pathname || 
     (route.path !== '/' && location.pathname.startsWith(route.path))
   );
@@ -157,19 +158,8 @@ function AppContent() {
 }
 
 function ProtectedRoute({ children, user }) {
-  const location = useLocation();
-
-  if (!user) {
-    // Store the intended path in sessionStorage for retrieval after login
-    sessionStorage.setItem('redirectAfterLogin', location.pathname + location.search);
-    // Redirect to dashboard with showAuth flag to trigger auth modal
-    // Only redirect if we're not already at dashboard or if showAuth state isn't set
-    if (location.pathname !== '/dashboard' || !location.state?.showAuth) {
-      return <Navigate to="/dashboard" state={{ from: location, showAuth: true }} replace />;
-    }
-    // If already at dashboard with showAuth, just render children (auth modal will show)
-    return children;
-  }
+  // Always render children - let individual pages handle auth requirements
+  // This prevents redirect loops and allows pages to show content with auth prompts
   return children;
 }
 
