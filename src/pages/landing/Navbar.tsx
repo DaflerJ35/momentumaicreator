@@ -1,10 +1,14 @@
 import { useState } from "react";
+import { useNavigate, Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Menu, X } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { useAuth } from "@/contexts/AuthContext";
 
 const Navbar = () => {
   const [isOpen, setIsOpen] = useState(false);
+  const navigate = useNavigate();
+  const { currentUser } = useAuth();
 
   const navItems = [
     { label: "Features", href: "#features" },
@@ -12,31 +16,41 @@ const Navbar = () => {
     { label: "Testimonials", href: "#testimonials" },
   ];
 
+  const handleGetStarted = () => {
+    if (currentUser) {
+      navigate('/dashboard');
+    } else {
+      navigate('/dashboard', { state: { showAuth: true } });
+    }
+  };
+
   return (
     <nav className="fixed top-0 w-full z-50 glass-morphism border-b border-border/50">
       <div className="container mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-20">
-          <motion.div
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.5 }}
-            className="flex items-center gap-3 group cursor-pointer"
-            whileHover={{ scale: 1.05 }}
-          >
-            <div className="relative">
-              <div className="absolute inset-0 bg-gradient-to-r from-neon-blue to-neon-magenta rounded-full blur-lg opacity-0 group-hover:opacity-75 transition-opacity duration-300" />
-              <video
-                autoPlay
-                loop
-                muted
-                playsInline
-                className="relative w-12 h-12 object-contain"
-              >
-                <source src="/logo-animation.mp4" type="video/mp4" />
-              </video>
-            </div>
-            <span className="text-2xl font-bold gradient-text group-hover:scale-105 transition-transform duration-300">Momentum AI</span>
-          </motion.div>
+          <Link to="/">
+            <motion.div
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ duration: 0.5 }}
+              className="flex items-center gap-3 group cursor-pointer"
+              whileHover={{ scale: 1.05 }}
+            >
+              <div className="relative">
+                <div className="absolute inset-0 bg-gradient-to-r from-neon-blue to-neon-magenta rounded-full blur-lg opacity-0 group-hover:opacity-75 transition-opacity duration-300" />
+                <video
+                  autoPlay
+                  loop
+                  muted
+                  playsInline
+                  className="relative w-12 h-12 object-contain"
+                >
+                  <source src="/logo-animation.mp4" type="video/mp4" />
+                </video>
+              </div>
+              <span className="text-2xl font-bold gradient-text group-hover:scale-105 transition-transform duration-300">Momentum AI</span>
+            </motion.div>
+          </Link>
 
           <motion.div 
             className="hidden md:flex items-center space-x-8"
@@ -56,8 +70,11 @@ const Navbar = () => {
               </motion.a>
             ))}
             <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-              <Button className="relative group bg-gradient-to-r from-neon-violet to-neon-magenta hover:from-neon-magenta hover:to-neon-violet shadow-[0_0_20px_hsl(var(--neon-violet))] hover:shadow-[0_0_40px_hsl(var(--neon-magenta))] transition-all duration-300 overflow-hidden">
-                <span className="relative z-10">Get Started</span>
+              <Button 
+                onClick={handleGetStarted}
+                className="relative group bg-gradient-to-r from-neon-violet to-neon-magenta hover:from-neon-magenta hover:to-neon-violet shadow-[0_0_20px_hsl(var(--neon-violet))] hover:shadow-[0_0_40px_hsl(var(--neon-magenta))] transition-all duration-300 overflow-hidden"
+              >
+                <span className="relative z-10">{currentUser ? 'Dashboard' : 'Get Started'}</span>
                 <div className="absolute inset-0 bg-white/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
               </Button>
             </motion.div>
@@ -91,8 +108,11 @@ const Navbar = () => {
                   {item.label}
                 </a>
               ))}
-              <Button className="w-full bg-neon-violet hover:bg-neon-violet/80">
-                Get Started
+              <Button 
+                onClick={handleGetStarted}
+                className="w-full bg-neon-violet hover:bg-neon-violet/80"
+              >
+                {currentUser ? 'Dashboard' : 'Get Started'}
               </Button>
             </div>
           </motion.div>

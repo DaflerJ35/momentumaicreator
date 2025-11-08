@@ -2,14 +2,19 @@ import { Button } from "@/components/ui/button";
 import { Play, ChevronRight, ChevronDown } from "lucide-react";
 import { motion } from "framer-motion";
 import { useToast } from "@/hooks/use-toast";
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "@/contexts/AuthContext";
 
 const HeroSection = () => {
   const { toast } = useToast();
+  const navigate = useNavigate();
+  const { currentUser } = useAuth();
 
   const handleGetStarted = () => {
-    const pricingSection = document.getElementById('pricing');
-    if (pricingSection) {
-      pricingSection.scrollIntoView({ behavior: 'smooth' });
+    if (currentUser) {
+      navigate('/dashboard');
+    } else {
+      navigate('/dashboard', { state: { showAuth: true } });
     }
   };
 
