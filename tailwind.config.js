@@ -23,7 +23,29 @@ export default {
         dark: {
           800: '#1e293b',
           900: '#0f172a',
-        }
+        },
+        neon: {
+          blue: 'hsl(200, 100%, 50%)',
+          magenta: 'hsl(320, 90%, 55%)',
+          violet: 'hsl(280, 85%, 60%)',
+        },
+        cosmic: {
+          purple: 'hsl(265, 80%, 30%)',
+          space: 'hsl(240, 10%, 5%)',
+        },
+        background: 'hsl(var(--background))',
+        foreground: 'hsl(var(--foreground))',
+        card: {
+          DEFAULT: 'hsl(var(--card))',
+          foreground: 'hsl(var(--card-foreground))',
+        },
+        popover: {
+          DEFAULT: 'hsl(var(--popover))',
+          foreground: 'hsl(var(--popover-foreground))',
+        },
+        border: 'hsl(var(--border))',
+        input: 'hsl(var(--input))',
+        ring: 'hsl(var(--ring))',
       },
       fontFamily: {
         sans: ['Inter', 'sans-serif'],

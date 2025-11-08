@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 
 // Lazy load page components
+const LandingPage = lazy(() => import('../pages/general/LandingPage'));
 const Dashboard = lazy(() => import('../pages/general/Dashboard'));
 const Analytics = lazy(() => import('../pages/analytics/Analytics'));
 const SettingsPage = lazy(() => import('../pages/account/Settings'));
@@ -39,6 +40,15 @@ const Referrals = lazy(() => import('../pages/growth/Referrals'));
 const TeamManagement = lazy(() => import('../pages/team/TeamManagement'));
 
 export const routes = [
+  {
+    path: '/',
+    element: LandingPage,
+    title: 'Home',
+    icon: Home,
+    showInNav: false,
+    category: 'main',
+    protected: false
+  },
   {
     path: '/dashboard',
     element: Dashboard,

@@ -105,7 +105,6 @@ function AppContent() {
         // Public routes without the app shell
         <div className="relative z-10">
           <Routes>
-            <Route path="/" element={<Navigate to="/dashboard" replace />} />
             {publicRoutes.map((route) => (
               <Route
                 key={route.path}
@@ -123,7 +122,6 @@ function AppContent() {
         // Protected routes with app shell
         <AppShell>
           <Routes>
-            <Route path="/" element={<Navigate to="/dashboard" replace />} />
             {protectedRoutes.map((route) => (
               <Route
                 key={route.path}
