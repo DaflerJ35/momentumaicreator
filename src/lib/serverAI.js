@@ -3,7 +3,19 @@
  * Supports both Gemini and Ollama through the server
  */
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+// Use relative paths in production (same domain), or VITE_API_URL if explicitly set
+const getApiUrl = () => {
+  const envUrl = import.meta.env.VITE_API_URL;
+  // If VITE_API_URL is set and not localhost, use it
+  if (envUrl && !envUrl.includes('localhost')) {
+    return envUrl;
+  }
+  // In production or if VITE_API_URL is localhost, use relative paths (same domain)
+  // This works with Vercel serverless functions
+  return '';
+};
+
+const API_URL = getApiUrl();
 
 /**
  * Generate content using server API
