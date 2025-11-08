@@ -42,12 +42,12 @@ const TeamManagement = lazy(() => import('../pages/team/TeamManagement'));
 export const routes = [
   {
     path: '/',
-    element: LandingPage,
-    title: 'Home',
+    element: Dashboard,
+    title: 'Dashboard',
     icon: Home,
-    showInNav: false,
+    showInNav: true,
     category: 'main',
-    protected: false
+    protected: true
   },
   {
     path: '/dashboard',

@@ -7,6 +7,7 @@ import Navbar from './components/Navbar';
 import Sidebar from './components/Sidebar';
 import AuthModal from './components/auth/AuthModal';
 import AnimatedBackground from './components/AnimatedBackground';
+import NotFound from './pages/NotFound';
 import { Toaster } from 'sonner';
 
 // Premium loading spinner component
