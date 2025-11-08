@@ -69,8 +69,7 @@ function AppContent() {
   const protectedRoutes = routes.filter(route => route.protected);
 
   // Check if the current route is public
-  // Root route (/) should use app shell (treated as protected route)
-  const isPublicRoute = location.pathname !== '/' && publicRoutes.some(route => 
+  const isPublicRoute = publicRoutes.some(route => 
     route.path === location.pathname || 
     (route.path !== '/' && location.pathname.startsWith(route.path))
   );
