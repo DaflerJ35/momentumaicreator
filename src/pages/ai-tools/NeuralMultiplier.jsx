@@ -79,18 +79,17 @@ const contentTemplates = {
   }
 };
 
-const platforms = [
-  { id: 'twitter', name: 'Twitter', maxLength: 280 },
-  { id: 'instagram', name: 'Instagram', maxLength: 2200 },
-  { id: 'linkedin', name: 'LinkedIn', maxLength: 3000 },
-  { id: 'tiktok', name: 'TikTok', maxLength: 150 },
-  { id: 'facebook', name: 'Facebook', maxLength: 63206 },
-  { id: 'youtube', name: 'YouTube', maxLength: 5000 },
-  { id: 'pinterest', name: 'Pinterest', maxLength: 500 },
-  { id: 'blog', name: 'Blog Post', maxLength: 10000 },
-  { id: 'email', name: 'Email Newsletter', maxLength: 5000 },
-  { id: 'threads', name: 'Threads', maxLength: 500 },
-];
+// Import all platforms from the platform configuration
+import { PLATFORMS } from '../../lib/platforms';
+
+// Convert PLATFORMS to NeuralMultiplier format
+const platforms = Object.values(PLATFORMS).map(platform => ({
+  id: platform.id,
+  name: platform.name,
+  maxLength: platform.maxPostLength || 5000,
+  icon: platform.icon,
+  category: platform.category,
+}));
 
 const toneOptions = [
   'Professional', 'Casual', 'Friendly', 'Authoritative', 'Humorous',
