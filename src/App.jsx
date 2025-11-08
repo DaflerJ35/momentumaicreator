@@ -100,7 +100,7 @@ function AppContent() {
 
   return (
     <div className="app-container relative">
-      <AnimatedBackground />
+      {!isPublicRoute && <AnimatedBackground />}
       {isPublicRoute ? (
         // Public routes without the app shell
         <div className="relative z-10">
@@ -116,6 +116,8 @@ function AppContent() {
                 }
               />
             ))}
+            {/* Catch-all for public routes */}
+            <Route path="*" element={<NotFound />} />
           </Routes>
         </div>
       ) : (
