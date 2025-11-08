@@ -26,6 +26,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useState, useEffect } from 'react';
+import { FloatingElement } from './animations/FloatingElements';
 
 // Group routes by section
 const groupRoutesBySection = (routes) => {
@@ -89,16 +90,21 @@ const NavItem = ({ item, isCollapsed, isActive, onClick }) => {
   const Icon = item.icon || Home;
   
   return (
-    <Link
-      to={item.path}
-      onClick={onClick}
-      className={`group flex items-center px-3 py-2.5 text-sm font-medium rounded-lg transition-colors ${
-        isActive
-          ? 'bg-slate-800 text-white'
-          : 'text-slate-300 hover:bg-slate-800 hover:text-white'
-      } ${isCollapsed ? 'justify-center' : ''}`}
-      title={isCollapsed ? item.title : ''}
+    <motion.div
+      whileHover={{ x: isCollapsed ? 0 : 4 }}
+      whileTap={{ scale: 0.95 }}
+      transition={{ type: 'spring', stiffness: 400, damping: 25 }}
     >
+      <Link
+        to={item.path}
+        onClick={onClick}
+        className={`group flex items-center px-3 py-2.5 text-sm font-medium rounded-lg transition-all ${
+          isActive
+            ? 'bg-gradient-to-r from-[hsl(200,100%,50%)]/20 to-[hsl(280,85%,60%)]/20 border-l-4 border-[hsl(200,100%,50%)] text-white shadow-lg shadow-[hsl(200,100%,50%)]/20'
+            : 'text-slate-300 hover:bg-slate-800/50 hover:text-white border-l-4 border-transparent'
+        } ${isCollapsed ? 'justify-center' : ''}`}
+        title={isCollapsed ? item.title : ''}
+      >
       <Icon
         className={`flex-shrink-0 ${
           isActive 

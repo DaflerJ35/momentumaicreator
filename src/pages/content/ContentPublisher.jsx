@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
 import { Textarea } from '../../components/ui/textarea';
@@ -10,6 +10,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { PLATFORMS, getPlatformsByCategory } from '../../lib/platforms';
 import { unifiedAPI } from '../../lib/unifiedAPI';
 import { toast } from 'sonner';
+import { StaggerContainer, StaggerItem } from '../../components/animations/StaggerChildren';
+import { FloatingElement, PulsingElement } from '../../components/animations/FloatingElements';
+import RevealOnScroll from '../../components/animations/RevealOnScroll';
+import AnimatedButton from '../../components/ui/AnimatedButton';
+import { ShimmerText } from '../../components/animations/ShimmerEffect';
 import { 
   Send, 
   Calendar, 
@@ -231,74 +236,96 @@ const ContentPublisher = () => {
                 )}
 
                 {socialPlatforms.length > 0 && (
-                  <div>
-                    <h3 className="text-sm font-semibold text-neon-blue mb-2">Social Media</h3>
-                    <div className="space-y-2">
-                      {socialPlatforms.map((platform) => (
-                      <div key={platform.id} className="flex items-center space-x-2">
-                        <Checkbox
-                          id={platform.id}
-                          checked={selectedPlatforms.includes(platform.id)}
-                          onCheckedChange={() => togglePlatform(platform.id)}
-                        />
-                        <Label
-                          htmlFor={platform.id}
-                          className="text-sm text-slate-300 cursor-pointer flex items-center gap-2"
-                        >
-                          <span>{platform.icon}</span>
-                          {platform.name}
-                        </Label>
-                        </div>
-                      ))}
+                  <RevealOnScroll delay={0.2}>
+                    <div>
+                      <h3 className="text-sm font-semibold text-neon-blue mb-2">Social Media</h3>
+                      <StaggerContainer className="space-y-2">
+                        {socialPlatforms.map((platform) => (
+                          <StaggerItem key={platform.id}>
+                            <motion.div 
+                              className="flex items-center space-x-2 p-2 rounded-lg hover:bg-slate-800/50 transition-colors"
+                              whileHover={{ x: 4 }}
+                            >
+                              <Checkbox
+                                id={platform.id}
+                                checked={selectedPlatforms.includes(platform.id)}
+                                onCheckedChange={() => togglePlatform(platform.id)}
+                              />
+                              <Label
+                                htmlFor={platform.id}
+                                className="text-sm text-slate-300 cursor-pointer flex items-center gap-2 flex-1"
+                              >
+                                <FloatingElement duration={2}>
+                                  <span className="text-lg">{platform.icon}</span>
+                                </FloatingElement>
+                                {platform.name}
+                              </Label>
+                            </motion.div>
+                          </StaggerItem>
+                        ))}
+                      </StaggerContainer>
                     </div>
-                  </div>
+                  </RevealOnScroll>
                 )}
 
                 {blogPlatforms.length > 0 && (
-                  <div>
-                    <h3 className="text-sm font-semibold text-neon-magenta mb-2">Blogs</h3>
-                    <div className="space-y-2">
-                      {blogPlatforms.map((platform) => (
-                      <div key={platform.id} className="flex items-center space-x-2">
-                        <Checkbox
-                          id={platform.id}
-                          checked={selectedPlatforms.includes(platform.id)}
-                          onCheckedChange={() => togglePlatform(platform.id)}
-                        />
-                        <Label
-                          htmlFor={platform.id}
-                          className="text-sm text-slate-300 cursor-pointer flex items-center gap-2"
-                        >
-                          <span>{platform.icon}</span>
-                          {platform.name}
-                        </Label>
-                        </div>
-                      ))}
+                  <RevealOnScroll delay={0.3}>
+                    <div>
+                      <h3 className="text-sm font-semibold text-neon-magenta mb-2">Blogs</h3>
+                      <StaggerContainer className="space-y-2">
+                        {blogPlatforms.map((platform) => (
+                          <StaggerItem key={platform.id}>
+                            <motion.div 
+                              className="flex items-center space-x-2 p-2 rounded-lg hover:bg-slate-800/50 transition-colors"
+                              whileHover={{ x: 4 }}
+                            >
+                              <Checkbox
+                                id={platform.id}
+                                checked={selectedPlatforms.includes(platform.id)}
+                                onCheckedChange={() => togglePlatform(platform.id)}
+                              />
+                              <Label
+                                htmlFor={platform.id}
+                                className="text-sm text-slate-300 cursor-pointer flex items-center gap-2 flex-1"
+                              >
+                                <FloatingElement duration={2}>
+                                  <span className="text-lg">{platform.icon}</span>
+                                </FloatingElement>
+                                {platform.name}
+                              </Label>
+                            </motion.div>
+                          </StaggerItem>
+                        ))}
+                      </StaggerContainer>
                     </div>
-                  </div>
+                  </RevealOnScroll>
                 )}
               </CardContent>
             </Card>
 
             {/* Publish Button */}
-            <Button
+            <AnimatedButton
               onClick={handlePublish}
               disabled={publishing || !content.trim() || selectedPlatforms.length === 0 || connectedPlatforms.length === 0}
-              className="w-full bg-gradient-to-r from-[hsl(200,100%,50%)] to-[hsl(280,85%,60%)] hover:from-[hsl(280,85%,60%)] hover:to-[hsl(320,90%,55%)] text-white disabled:opacity-50"
+              className="w-full bg-gradient-to-r from-[hsl(200,100%,50%)] to-[hsl(280,85%,60%)] hover:from-[hsl(280,85%,60%)] hover:to-[hsl(320,90%,55%)] text-white disabled:opacity-50 shadow-lg hover:shadow-xl hover:shadow-[hsl(200,100%,50%)]/50"
               size="lg"
             >
               {publishing ? (
-                <>
-                  <Loader2 className="h-5 w-5 mr-2 animate-spin" />
+                <motion.div
+                  animate={{ rotate: 360 }}
+                  transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+                  className="flex items-center"
+                >
+                  <Loader2 className="h-5 w-5 mr-2" />
                   Publishing...
-                </>
+                </motion.div>
               ) : (
                 <>
                   <Send className="h-5 w-5 mr-2" />
                   {scheduleTime ? 'Schedule' : 'Publish Now'}
                 </>
               )}
-            </Button>
+            </AnimatedButton>
           </div>
         </div>
 

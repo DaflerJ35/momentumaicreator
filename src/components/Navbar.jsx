@@ -1,8 +1,11 @@
 import { useState, useEffect } from 'react';
 import PropTypes from 'prop-types';
-import { Moon, Sun, Bell, User } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Moon, Sun, Bell, User, Menu, X, Sparkles } from 'lucide-react';
+import { FloatingElement, PulsingElement } from './animations/FloatingElements';
+import { ShimmerText } from './animations/ShimmerEffect';
 
-function Navbar({ user, onAuthClick }) {
+function Navbar({ user, onAuthClick, onMenuToggle }) {
   const [darkMode, setDarkMode] = useState(() => {
     // Initialize from localStorage or system preference
     const stored = localStorage.getItem('darkMode');
@@ -28,76 +31,144 @@ function Navbar({ user, onAuthClick }) {
   };
 
   return (
-    <nav className="bg-transparent border-b border-slate-700/30 px-6 py-4 transition-colors relative z-50">
+    <motion.nav 
+      initial={{ y: -100, opacity: 0 }}
+      animate={{ y: 0, opacity: 1 }}
+      transition={{ duration: 0.5, ease: 'easeOut' }}
+      className="bg-slate-900/80 backdrop-blur-xl border-b border-white/10 px-6 py-4 transition-colors relative z-50 shadow-xl"
+    >
       <div className="flex items-center justify-between max-w-7xl mx-auto">
         <div className="flex items-center space-x-4">
-          <h1 className="text-2xl font-bold text-slate-200">
-            Momentum AI
-          </h1>
+          <motion.button
+            onClick={onMenuToggle}
+            whileHover={{ scale: 1.1 }}
+            whileTap={{ scale: 0.9 }}
+            className="p-2 rounded-lg hover:bg-slate-800/50 transition-colors lg:hidden"
+          >
+            <Menu className="w-5 h-5 text-slate-300" />
+          </motion.button>
+          <FloatingElement duration={3}>
+            <div className="flex items-center gap-2">
+              <div className="relative">
+                <motion.div
+                  animate={{
+                    rotate: [0, 360],
+                  }}
+                  transition={{
+                    duration: 20,
+                    repeat: Infinity,
+                    ease: 'linear',
+                  }}
+                  className="absolute inset-0 bg-gradient-to-r from-[hsl(200,100%,50%)] to-[hsl(280,85%,60%)] rounded-lg blur-xl opacity-50"
+                />
+                <div className="relative bg-gradient-to-r from-[hsl(200,100%,50%)] to-[hsl(280,85%,60%)] p-2 rounded-lg">
+                  <Sparkles className="h-5 w-5 text-white" />
+                </div>
+              </div>
+              <ShimmerText className="text-2xl font-bold">Momentum AI</ShimmerText>
+            </div>
+          </FloatingElement>
         </div>
 
         <div className="flex items-center space-x-3">
           {/* Dark mode toggle */}
-          <button
+          <motion.button
             onClick={toggleDarkMode}
-            className="p-2 rounded-lg hover:bg-slate-800/50 transition-colors"
+            whileHover={{ scale: 1.1, rotate: 180 }}
+            whileTap={{ scale: 0.9 }}
+            className="p-2 rounded-lg hover:bg-slate-800/50 transition-colors relative"
             aria-label="Toggle dark mode"
           >
-            {darkMode ? (
-              <Sun className="w-5 h-5 text-slate-400" />
-            ) : (
-              <Moon className="w-5 h-5 text-slate-400" />
-            )}
-          </button>
+            <AnimatePresence mode="wait">
+              {darkMode ? (
+                <motion.div
+                  key="sun"
+                  initial={{ opacity: 0, rotate: -180 }}
+                  animate={{ opacity: 1, rotate: 0 }}
+                  exit={{ opacity: 0, rotate: 180 }}
+                  transition={{ duration: 0.2 }}
+                >
+                  <Sun className="w-5 h-5 text-[hsl(200,100%,50%)]" />
+                </motion.div>
+              ) : (
+                <motion.div
+                  key="moon"
+                  initial={{ opacity: 0, rotate: 180 }}
+                  animate={{ opacity: 1, rotate: 0 }}
+                  exit={{ opacity: 0, rotate: -180 }}
+                  transition={{ duration: 0.2 }}
+                >
+                  <Moon className="w-5 h-5 text-slate-400" />
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </motion.button>
 
           {/* Notifications */}
-          <button
+          <motion.button
+            whileHover={{ scale: 1.1 }}
+            whileTap={{ scale: 0.9 }}
             className="p-2 rounded-lg hover:bg-slate-800/50 transition-colors relative"
             aria-label="Notifications"
           >
-            <Bell className="w-5 h-5 text-slate-400" />
-            <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
-          </button>
+            <Bell className="w-5 h-5 text-slate-400 hover:text-[hsl(200,100%,50%)] transition-colors" />
+            <PulsingElement>
+              <motion.span 
+                className="absolute top-1 right-1 w-2 h-2 bg-[hsl(200,100%,50%)] rounded-full"
+                animate={{
+                  scale: [1, 1.5, 1],
+                  opacity: [1, 0.5, 1],
+                }}
+                transition={{ duration: 2, repeat: Infinity }}
+              />
+            </PulsingElement>
+          </motion.button>
 
           {/* User menu */}
           {user ? (
-            <div className="flex items-center space-x-3">
-              <img
+            <motion.div 
+              className="flex items-center space-x-3"
+              whileHover={{ scale: 1.05 }}
+            >
+              <motion.img
                 src={user.photoURL || '/default-avatar.png'}
                 alt={user.displayName || 'User'}
-                className="w-8 h-8 rounded-full border-2 border-slate-700"
+                className="w-8 h-8 rounded-full border-2 border-[hsl(200,100%,50%)]/50 cursor-pointer"
                 onError={(e) => {
                   e.target.onerror = null;
                   e.target.src = '/default-avatar.png';
                 }}
+                whileHover={{
+                  borderColor: 'hsl(200,100%,50%)',
+                  boxShadow: '0 0 20px rgba(59, 130, 246, 0.5)',
+                }}
+                transition={{ duration: 0.2 }}
               />
-              <span className="text-sm font-medium text-slate-300">
+              <span className="text-sm font-medium text-slate-300 hidden md:block">
                 {user.displayName || user.email}
               </span>
-            </div>
+            </motion.div>
           ) : (
-            <button
+            <motion.button
               onClick={onAuthClick}
-              className="flex items-center space-x-2 px-4 py-2 bg-slate-800/50 text-slate-300 rounded-lg border border-slate-700/50 hover:bg-slate-800/70 hover:border-slate-600 transition-colors"
-              aria-label="Sign in"
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              className="px-4 py-2 bg-gradient-to-r from-[hsl(200,100%,50%)] to-[hsl(280,85%,60%)] hover:from-[hsl(280,85%,60%)] hover:to-[hsl(320,90%,55%)] text-white rounded-lg font-medium shadow-lg hover:shadow-xl hover:shadow-[hsl(200,100%,50%)]/50 transition-all"
             >
-              <User className="w-4 h-4" />
-              <span>Sign In</span>
-            </button>
+              <User className="w-4 h-4 inline mr-2" />
+              Sign In
+            </motion.button>
           )}
         </div>
       </div>
-    </nav>
+    </motion.nav>
   );
 }
 
 Navbar.propTypes = {
-  user: PropTypes.shape({
-    displayName: PropTypes.string,
-    email: PropTypes.string,
-    photoURL: PropTypes.string,
-  }),
+  user: PropTypes.object,
   onAuthClick: PropTypes.func.isRequired,
+  onMenuToggle: PropTypes.func,
 };
 
 export default Navbar;
