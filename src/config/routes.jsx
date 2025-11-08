@@ -6,6 +6,24 @@ import {
   CreditCard,
   DollarSign,
   Mail,
+  Brain,
+  Copy,
+  RefreshCw,
+  Bot,
+  TrendingUp,
+  Zap,
+  Clock,
+  Lightbulb,
+  Video,
+  Image as ImageIcon,
+  Mic,
+  Target,
+  Search,
+  Archive,
+  FileText,
+  Calendar,
+  History,
+  TestTube2,
 } from 'lucide-react';
 
 // Lazy load page components
@@ -62,7 +80,34 @@ export const routes = [
     title: 'Analytics',
     icon: BarChart3,
     showInNav: true,
-    category: 'main',
+    category: 'content',
+    protected: true
+  },
+  {
+    path: '/templates',
+    element: AIToolsHub,
+    title: 'Templates',
+    icon: FileText,
+    showInNav: true,
+    category: 'content',
+    protected: true
+  },
+  {
+    path: '/history',
+    element: AIToolsHub,
+    title: 'History',
+    icon: History,
+    showInNav: true,
+    category: 'content',
+    protected: true
+  },
+  {
+    path: '/ab-testing',
+    element: AIToolsHub,
+    title: 'A/B Testing',
+    icon: TestTube2,
+    showInNav: true,
+    category: 'advanced',
     protected: true
   },
   {
@@ -111,105 +156,135 @@ export const routes = [
     path: '/ai-tools/neural-strategist',
     element: NeuralStrategist,
     title: 'Neural Strategist',
-    showInNav: false,
+    icon: Brain,
+    showInNav: true,
+    category: 'ai',
     protected: true
   },
   {
     path: '/ai-tools/neural-multiplier',
     element: NeuralMultiplier,
     title: 'Neural Multiplier',
-    showInNav: false,
+    icon: Copy,
+    showInNav: true,
+    category: 'ai',
     protected: true
   },
   {
     path: '/ai-tools/content-transform',
     element: AIContentTransform,
-    title: 'AI Content Transform',
-    showInNav: false,
+    title: 'Content Transformer',
+    icon: RefreshCw,
+    showInNav: true,
+    category: 'ai',
     protected: true
   },
   {
     path: '/ai-tools/creator-hub',
     element: CreatorHub,
     title: 'Creator Hub',
-    showInNav: false,
+    icon: Bot,
+    showInNav: true,
+    category: 'ai',
     protected: true
   },
   {
     path: '/ai-tools/trend-analyzer',
     element: TrendAnalyzer,
-    title: 'Trend Analyzer',
-    showInNav: false,
+    title: 'AI Analyzer',
+    icon: TrendingUp,
+    showInNav: true,
+    category: 'ai',
     protected: true
   },
   {
     path: '/ai-tools/hashtag-generator',
     element: HashtagGenerator,
     title: 'Hashtag Generator',
+    icon: Zap,
     showInNav: false,
+    category: 'ai',
     protected: true
   },
   {
     path: '/ai-tools/content-calendar',
     element: ContentCalendar,
-    title: 'Content Calendar',
-    showInNav: false,
+    title: 'Schedule',
+    icon: Calendar,
+    showInNav: true,
+    category: 'content',
     protected: true
   },
   {
     path: '/ai-tools/idea-generator',
     element: IdeaGenerator,
     title: 'Idea Generator',
+    icon: Lightbulb,
     showInNav: false,
+    category: 'ai',
     protected: true
   },
   {
     path: '/ai-tools/video-studio',
     element: VideoStudio,
     title: 'Video Studio',
+    icon: Video,
     showInNav: false,
+    category: 'ai',
     protected: true
   },
   {
     path: '/ai-tools/image-studio',
     element: ImageStudio,
     title: 'Image Studio',
+    icon: ImageIcon,
     showInNav: false,
+    category: 'ai',
     protected: true
   },
   {
     path: '/ai-tools/voice-studio',
     element: VoiceStudio,
     title: 'Voice Studio',
+    icon: Mic,
     showInNav: false,
+    category: 'ai',
     protected: true
   },
   {
     path: '/ai-tools/performance-predictor',
     element: PerformancePredictor,
     title: 'Performance Predictor',
+    icon: Target,
     showInNav: false,
+    category: 'ai',
     protected: true
   },
   {
     path: '/ai-tools/seo-optimizer',
     element: SEOOptimizer,
     title: 'SEO Optimizer',
+    icon: Search,
     showInNav: false,
+    category: 'ai',
     protected: true
   },
   {
     path: '/ai-tools/content-repurposing-pipeline',
     element: ContentRepurposingPipeline,
-    title: 'Content Repurposing Pipeline',
+    title: 'Content Pipeline',
+    icon: RefreshCw,
     showInNav: false,
+    category: 'ai',
     protected: true
   },
   {
     path: '/ai-tools/smart-content-library',
     element: SmartContentLibrary,
-    title: 'Smart Content Library',
+    title: 'Content Library',
+    icon: Archive,
     showInNav: false,
+    category: 'ai',
     protected: true
   },
   {

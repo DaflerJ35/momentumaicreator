@@ -24,6 +24,9 @@ export default {
           800: '#1e293b',
           900: '#0f172a',
         },
+        'neon-blue': 'hsl(200, 100%, 50%)',
+        'neon-magenta': 'hsl(320, 90%, 55%)',
+        'neon-violet': 'hsl(280, 85%, 60%)',
         neon: {
           blue: 'hsl(200, 100%, 50%)',
           magenta: 'hsl(320, 90%, 55%)',

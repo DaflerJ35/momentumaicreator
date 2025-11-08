@@ -30,33 +30,38 @@ import { useState, useEffect } from 'react';
 // Group routes by section
 const groupRoutesBySection = (routes) => {
   const sections = {
-    general: {
-      title: 'General',
+    main: {
+      title: 'MAIN',
       items: [],
       icon: Home
     },
     ai: {
-      title: 'AI Tools',
+      title: 'AI TOOLS',
       items: [],
       icon: Brain
     },
     content: {
-      title: 'Content',
+      title: 'CONTENT SUITE',
       items: [],
       icon: Copy
     },
     analytics: {
-      title: 'Analytics',
+      title: 'ANALYTICS',
       items: [],
       icon: LineChart
     },
+    advanced: {
+      title: 'ADVANCED TOOLS',
+      items: [],
+      icon: Zap
+    },
     growth: {
-      title: 'Growth',
+      title: 'GROWTH',
       items: [],
       icon: Rocket
     },
     account: {
-      title: 'Account',
+      title: 'ACCOUNT',
       items: [],
       icon: UserIcon
     }
@@ -64,11 +69,11 @@ const groupRoutesBySection = (routes) => {
 
   routes.forEach(route => {
     if (route.showInNav && route.path !== '/') {
-      const section = route.path.split('/')[1] || 'general';
-      if (sections[section]) {
-        sections[section].items.push(route);
+      const category = route.category || route.path.split('/')[1] || 'main';
+      if (sections[category]) {
+        sections[category].items.push(route);
       } else {
-        sections.general.items.push(route);
+        sections.main.items.push(route);
       }
     }
   });
