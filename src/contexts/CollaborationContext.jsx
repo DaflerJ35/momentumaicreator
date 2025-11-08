@@ -103,38 +103,8 @@ export const CollaborationProvider = ({ children }) => {
     });
   }, [currentUser]);
 
-  // Monitor cursors for a specific page
-  const usePageCursors = useCallback((pageId) => {
-    const [pageCursors, setPageCursors] = useState({});
-
-    useEffect(() => {
-      if (!database || database._isMock || !currentUser || !pageId) {
-        setPageCursors({});
-        return;
-      }
-
-      const cursorsRef = ref(database, `cursors/${pageId}`);
-      
-      const unsubscribe = onValue(cursorsRef, (snapshot) => {
-        const cursorsData = snapshot.val();
-        if (cursorsData) {
-          const filteredCursors = {};
-          Object.entries(cursorsData).forEach(([uid, cursor]) => {
-            if (uid !== currentUser.uid && cursor) {
-              filteredCursors[uid] = cursor;
-            }
-          });
-          setPageCursors(filteredCursors);
-        }
-      });
-
-      return () => {
-        off(cursorsRef);
-      };
-    }, [currentUser, pageId]);
-
-    return pageCursors;
-  }, [currentUser]);
+  // Store page-specific cursors
+  const [pageCursors, setPageCursors] = useState({});
 
   // Monitor all cursors
   useEffect(() => {
@@ -192,13 +162,25 @@ export const CollaborationProvider = ({ children }) => {
     });
   }, [currentUser]);
 
+  // Get cursors for a specific page
+  const getPageCursors = useCallback((pageId) => {
+    if (!pageId) return {};
+    return Object.entries(cursors)
+      .filter(([key]) => key.startsWith(`${pageId}-`))
+      .reduce((acc, [key, cursor]) => {
+        const uid = key.split('-').slice(1).join('-'); // Extract uid from key
+        acc[uid] = cursor;
+        return acc;
+      }, {});
+  }, [cursors]);
+
   const value = {
     activeUsers,
     cursors,
     presence,
     isConnected,
     updateCursor,
-    usePageCursors,
+    getPageCursors,
     broadcastTyping,
     sendMessage,
   };
@@ -220,7 +202,7 @@ export const useCollaboration = () => {
       presence: {},
       isConnected: false,
       updateCursor: () => {},
-      usePageCursors: () => ({}),
+      getPageCursors: () => ({}),
       broadcastTyping: () => {},
       sendMessage: () => {},
     };

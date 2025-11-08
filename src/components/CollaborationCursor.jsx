@@ -1,22 +1,15 @@
 import { motion, AnimatePresence } from 'framer-motion';
 import { useCollaboration } from '../contexts/CollaborationContext';
-import { useState, useEffect } from 'react';
+import { useMemo } from 'react';
 
 const CollaborationCursor = ({ pageId }) => {
-  const { usePageCursors, activeUsers } = useCollaboration();
-  const [pageCursors, setPageCursors] = useState({});
-
+  const { getPageCursors, activeUsers } = useCollaboration();
+  
   // Get cursors for this page
-  useEffect(() => {
-    if (!pageId) {
-      setPageCursors({});
-      return;
-    }
-
-    // Use the hook from context to get page-specific cursors
-    const cursors = usePageCursors(pageId);
-    setPageCursors(cursors);
-  }, [pageId, usePageCursors]);
+  const pageCursors = useMemo(() => {
+    if (!pageId) return {};
+    return getPageCursors(pageId);
+  }, [pageId, getPageCursors]);
 
   return (
     <div className="fixed inset-0 pointer-events-none z-50">
