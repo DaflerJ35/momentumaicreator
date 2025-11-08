@@ -5,20 +5,10 @@
   "framework": "vite",
   "rewrites": [
     {
-      "source": "/api/(.*)",
-      "destination": "/api/index.js"
-    },
-    {
       "source": "/(.*)",
       "destination": "/index.html"
     }
   ],
-  "functions": {
-    "api/**/*.js": {
-      "runtime": "nodejs20.x",
-      "includeFiles": "server/**"
-    }
-  },
   "headers": [
     {
       "source": "/(.*)",
