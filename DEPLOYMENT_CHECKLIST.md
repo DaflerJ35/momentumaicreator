@@ -86,13 +86,108 @@ Add the following environment variables in Vercel:
 - [ ] Verify SEO meta tags
 - [ ] Test all CTAs and buttons
 
+## 🌐 Custom Domain Setup (After Initial Deployment)
+
+### When to Add Your Domain
+**Add your custom domain AFTER the initial deployment is successful.** This allows you to:
+1. First verify everything works on the Vercel-provided domain (e.g., `yourproject.vercel.app`)
+2. Then add your custom domain once you're confident everything is working
+
+### Step 1: Add Domain in Vercel
+1. Go to your project in Vercel Dashboard
+2. Click on **"Settings"** tab
+3. Click on **"Domains"** in the left sidebar
+4. Click **"Add Domain"** button
+5. Enter your domain (e.g., `momentumaicreator.com` or `www.momentumaicreator.com`)
+6. Click **"Add"**
+
+### Step 2: Configure DNS Records
+Vercel will show you what DNS records to add. You'll need to add these at your domain registrar (where you bought the domain):
+
+#### Option A: Root Domain (e.g., `momentumaicreator.com`)
+Add these DNS records at your domain registrar:
+
+**Type A Record:**
+- Name: `@` (or leave blank, depends on your registrar)
+- Value: `76.76.21.21` (Vercel's IP)
+- TTL: Auto or 3600
+
+**Type CNAME Record:**
+- Name: `www`
+- Value: `cname.vercel-dns.com.`
+- TTL: Auto or 3600
+
+#### Option B: Subdomain (e.g., `app.momentumaicreator.com`)
+Add this DNS record:
+
+**Type CNAME Record:**
+- Name: `app` (or your subdomain)
+- Value: `cname.vercel-dns.com.`
+- TTL: Auto or 3600
+
+### Step 3: Update Vercel Domain Configuration
+1. Vercel will automatically detect your DNS configuration
+2. Wait for DNS propagation (can take 5 minutes to 48 hours, usually 15-30 minutes)
+3. Vercel will automatically issue an SSL certificate (free!)
+4. Your site will be accessible at your custom domain
+
+### Step 4: Verify Domain
+- [ ] Check domain resolves correctly (use `ping yourdomain.com`)
+- [ ] Verify SSL certificate is active (green lock in browser)
+- [ ] Test both `yourdomain.com` and `www.yourdomain.com`
+- [ ] Verify redirects work correctly
+
+### Common Domain Registrars Setup
+
+#### If you bought from GoDaddy:
+1. Log into GoDaddy
+2. Go to "My Products" → "DNS"
+3. Add the DNS records Vercel provided
+4. Wait for propagation
+
+#### If you bought from Namecheap:
+1. Log into Namecheap
+2. Go to "Domain List" → Click "Manage"
+3. Go to "Advanced DNS" tab
+4. Add the DNS records Vercel provided
+5. Wait for propagation
+
+#### If you bought from Google Domains:
+1. Log into Google Domains
+2. Click on your domain
+3. Go to "DNS" section
+4. Add the DNS records Vercel provided
+5. Wait for propagation
+
+#### If you bought from Cloudflare:
+1. Log into Cloudflare
+2. Select your domain
+3. Go to "DNS" → "Records"
+4. Add the DNS records Vercel provided
+5. Make sure Cloudflare proxy is ON (orange cloud)
+6. Wait for propagation
+
+### Step 5: Update Environment Variables (If Needed)
+If your domain is different from the default, you may need to update:
+- Firebase Auth domains (add your custom domain)
+- Any hardcoded URLs in your code
+- OAuth redirect URIs
+
+### Step 6: Redirects (Optional)
+Vercel can automatically redirect:
+- `www` to non-`www` (or vice versa)
+- HTTP to HTTPS (automatic)
+
+Configure in `vercel.json` if needed, or in Vercel Dashboard under "Domains" settings.
+
 ## 🎯 Post-Deployment Tasks
 
 ### SEO & Analytics
 - [ ] Add Google Analytics (if desired)
-- [ ] Set up Google Search Console
+- [ ] Set up Google Search Console (with your custom domain)
 - [ ] Verify Open Graph images
 - [ ] Update social media previews
+- [ ] Update sitemap.xml with custom domain
 
 ### Performance
 - [ ] Monitor build times
@@ -101,9 +196,10 @@ Add the following environment variables in Vercel:
 - [ ] Set up CDN if needed
 
 ### Domain & SSL
-- [ ] Configure custom domain (if desired)
-- [ ] Verify SSL certificate (auto-configured by Vercel)
-- [ ] Set up domain redirects
+- [x] Configure custom domain (instructions above)
+- [x] Verify SSL certificate (auto-configured by Vercel)
+- [ ] Set up domain redirects (if needed)
+- [ ] Update Firebase Auth domains with custom domain
 
 ### Monitoring
 - [ ] Set up error tracking (Sentry, etc.)
