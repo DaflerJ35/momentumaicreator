@@ -9,6 +9,8 @@ import Sidebar from './components/Sidebar';
 import AuthModal from './components/auth/AuthModal';
 import AnimatedBackground from './components/AnimatedBackground';
 import ParticleBackground from './components/animations/ParticleBackground';
+import CommandPalette from './components/CommandPalette';
+import ErrorBoundary from './components/ErrorBoundary';
 import NotFound from './pages/NotFound';
 import { Toaster } from 'sonner';
 import { LoadingSpinner } from './components/ui/LoadingSpinner';
@@ -134,80 +136,87 @@ function AppContent() {
   );
 
   return (
-    <div className="app-container relative">
-      {!isPublicRoute && (
-        <>
-          <AnimatedBackground />
-          <ParticleBackground particleCount={30} />
-        </>
-      )}
-      {isPublicRoute ? (
-        // Public routes without the app shell
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={location.pathname}
-            initial="initial"
-            animate="in"
-            exit="out"
-            variants={pageVariants}
-            transition={pageTransition}
-            className="relative z-10"
-          >
-            <Routes location={location}>
-              {publicRoutes.map((route) => (
-                <Route
-                  key={route.path}
-                  path={route.path}
-                  element={
-                    <Suspense fallback={
-                      <div className="flex items-center justify-center min-h-screen">
-                        <LoadingSpinner size="xl" />
-                      </div>
-                    }>
-                      <route.element />
-                    </Suspense>
-                  }
-                />
-              ))}
-              {/* Catch-all for public routes */}
-              <Route path="*" element={<NotFound />} />
-            </Routes>
-          </motion.div>
-        </AnimatePresence>
-      ) : (
-        // Protected routes with app shell
-        <AppShell>
+    <ErrorBoundary>
+      <div className="app-container relative">
+        {!isPublicRoute && (
+          <>
+            <AnimatedBackground />
+            <ParticleBackground particleCount={30} />
+            <CommandPalette />
+          </>
+        )}
+        {isPublicRoute ? (
+          // Public routes without the app shell
           <AnimatePresence mode="wait">
-            <Routes location={location}>
-              {protectedRoutes.map((route) => (
-                <Route
-                  key={route.path}
-                  path={route.path}
-                  element={
-                    <ProtectedRoute user={user}>
-                      <route.element />
-                    </ProtectedRoute>
-                  }
-                />
-              ))}
-              {/* Catch-all for protected routes */}
-              <Route path="*" element={<Navigate to="/dashboard" replace />} />
-            </Routes>
+            <motion.div
+              key={location.pathname}
+              initial="initial"
+              animate="in"
+              exit="out"
+              variants={pageVariants}
+              transition={pageTransition}
+              className="relative z-10"
+            >
+              <ErrorBoundary>
+                <Routes location={location}>
+                  {publicRoutes.map((route) => (
+                    <Route
+                      key={route.path}
+                      path={route.path}
+                      element={
+                        <Suspense fallback={
+                          <div className="flex items-center justify-center min-h-screen">
+                            <LoadingSpinner size="xl" />
+                          </div>
+                        }>
+                          <route.element />
+                        </Suspense>
+                      }
+                    />
+                  ))}
+                  {/* Catch-all for public routes */}
+                  <Route path="*" element={<NotFound />} />
+                </Routes>
+              </ErrorBoundary>
+            </motion.div>
           </AnimatePresence>
-        </AppShell>
-      )}
-      
-      {/* Auth Modal - Rendered outside of routes */}
-      {showAuthModal && (
-        <AuthModal
-          isOpen={showAuthModal}
-          onClose={handleAuthModalClose}
-        />
-      )}
-      
-      {/* Toast notifications */}
-      <Toaster position="top-right" richColors />
-    </div>
+        ) : (
+          // Protected routes with app shell
+          <AppShell>
+            <ErrorBoundary>
+              <AnimatePresence mode="wait">
+                <Routes location={location}>
+                  {protectedRoutes.map((route) => (
+                    <Route
+                      key={route.path}
+                      path={route.path}
+                      element={
+                        <ProtectedRoute user={user}>
+                          <route.element />
+                        </ProtectedRoute>
+                      }
+                    />
+                  ))}
+                  {/* Catch-all for protected routes */}
+                  <Route path="*" element={<Navigate to="/dashboard" replace />} />
+                </Routes>
+              </AnimatePresence>
+            </ErrorBoundary>
+          </AppShell>
+        )}
+        
+        {/* Auth Modal - Rendered outside of routes */}
+        {showAuthModal && (
+          <AuthModal
+            isOpen={showAuthModal}
+            onClose={handleAuthModalClose}
+          />
+        )}
+        
+        {/* Toast notifications */}
+        <Toaster position="top-right" richColors />
+      </div>
+    </ErrorBoundary>
   );
 }
 
