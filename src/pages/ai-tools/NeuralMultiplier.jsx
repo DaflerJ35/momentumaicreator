@@ -39,6 +39,7 @@ import { exportToPdf, exportToDocx, exportToTxt, exportToJson, exportToHtml } fr
 import { sanitizeWithFormatting } from '../../utils/sanitize';
 import { debounce, throttle } from 'lodash-es';
 import { v4 as uuidv4 } from 'uuid';
+import { PLATFORMS } from '../../lib/platforms';
 
 // Content templates for different use cases
 const contentTemplates = {
@@ -79,10 +80,7 @@ const contentTemplates = {
   }
 };
 
-// Import all platforms from the platform configuration
-import { PLATFORMS } from '../../lib/platforms';
-
-// Convert PLATFORMS to NeuralMultiplier format
+// Convert PLATFORMS to NeuralMultiplier format - ALL platforms including OnlyFans, Fansly, etc.
 const platforms = Object.values(PLATFORMS).map(platform => ({
   id: platform.id,
   name: platform.name,
