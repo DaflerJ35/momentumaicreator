@@ -53,6 +53,11 @@ class ErrorBoundary extends React.Component {
     });
   };
 
+  handleNavigate = (path) => {
+    // Use window.location for navigation since we can't use hooks in class component
+    window.location.href = path;
+  };
+
   render() {
     if (this.state.hasError) {
       return <ErrorFallback 
@@ -60,6 +65,7 @@ class ErrorBoundary extends React.Component {
         errorInfo={this.state.errorInfo}
         errorId={this.state.errorId}
         onReset={this.handleReset}
+        onNavigate={this.handleNavigate}
       />;
     }
 
@@ -67,11 +73,7 @@ class ErrorBoundary extends React.Component {
   }
 }
 
-const ErrorFallback = ({ error, errorInfo, errorId, onReset }) => {
-  // Use window.location for navigation to avoid hook issues
-  const navigateTo = (path) => {
-    window.location.href = path;
-  };
+const ErrorFallback = ({ error, errorInfo, errorId, onReset, onNavigate }) => {
 
   return (
     <div className="min-h-screen flex items-center justify-center p-6 cosmic-bg relative">
@@ -140,7 +142,7 @@ const ErrorFallback = ({ error, errorInfo, errorId, onReset }) => {
               Try Again
             </Button>
             <Button
-              onClick={() => navigateTo('/dashboard')}
+              onClick={() => onNavigate('/dashboard')}
               variant="outline"
               className="border-slate-700 text-slate-300 hover:bg-slate-800/50"
             >

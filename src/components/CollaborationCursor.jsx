@@ -11,17 +11,26 @@ const CollaborationCursor = ({ pageId }) => {
     return getPageCursors(pageId);
   }, [pageId, getPageCursors]);
 
+  // Filter out invalid cursors
+  const validCursors = Object.entries(pageCursors || {}).filter(([userId, cursor]) => {
+    return cursor && typeof cursor.x === 'number' && typeof cursor.y === 'number' && 
+           cursor.x >= 0 && cursor.y >= 0 && 
+           cursor.x <= window.innerWidth && cursor.y <= window.innerHeight;
+  });
+
+  if (validCursors.length === 0) {
+    return null;
+  }
+
   return (
     <div className="fixed inset-0 pointer-events-none z-50">
       <AnimatePresence>
-        {Object.entries(pageCursors || {}).map(([userId, cursor]) => {
+        {validCursors.map(([userId, cursor]) => {
           const user = activeUsers.find(u => u.uid === userId) || { 
             uid: userId, 
-            name: cursor?.userName || 'User' 
+            name: cursor?.userName || cursor?.name || 'User' 
           };
           
-          if (!cursor || !cursor.x || !cursor.y) return null;
-
           return (
             <motion.div
               key={userId}
@@ -29,15 +38,13 @@ const CollaborationCursor = ({ pageId }) => {
               animate={{ 
                 opacity: 1, 
                 scale: 1,
-                x: cursor.x,
-                y: cursor.y,
               }}
               exit={{ opacity: 0, scale: 0 }}
               className="absolute"
               style={{
-                transform: `translate(-50%, -50%)`,
                 left: `${cursor.x}px`,
                 top: `${cursor.y}px`,
+                transform: 'translate(-50%, -50%)',
               }}
             >
               <svg
