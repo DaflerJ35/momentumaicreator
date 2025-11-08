@@ -19,10 +19,10 @@ import ParallaxSection from '../landing/ParallaxSection';
 const LandingPage = () => {
   useEffect(() => {
     // Update the title and meta description for SEO
-    document.title = "MOMENTUM.AI | AI Content Repurposing Platform";
+    document.title = "Momentum AI Creator | AI Content Repurposing Platform";
     const metaDescription = document.querySelector('meta[name="description"]');
     if (metaDescription) {
-      metaDescription.setAttribute("content", "Transform one piece of content into viral hits across every platform with MOMENTUM.AI's advanced AI-powered content repurposing platform. Start your free trial today!");
+      metaDescription.setAttribute("content", "Transform one piece of content into viral hits across every platform with Momentum AI Creator's advanced AI-powered content repurposing platform. Start your free trial today!");
     }
   }, []);
 

@@ -48,7 +48,7 @@ const Navbar = () => {
                   <source src="/logo-animation.mp4" type="video/mp4" />
                 </video>
               </div>
-              <span className="text-2xl font-bold gradient-text group-hover:scale-105 transition-transform duration-300">Momentum AI</span>
+              <span className="text-2xl font-bold gradient-text group-hover:scale-105 transition-transform duration-300">Momentum AI Creator</span>
             </motion.div>
           </Link>
 

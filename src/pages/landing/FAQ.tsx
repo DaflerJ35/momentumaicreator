@@ -10,12 +10,12 @@ const faqs = [
   {
     question: "How is this different from other AI content tools?",
     answer:
-      "Momentum AI is the only platform that combines strategy generation, content creation, AND distribution automation in one place. While other tools just generate content, we analyze your market, create your strategy, produce platform-optimized content, and automatically distribute it for maximum reach.",
+      "Momentum AI Creator is the only platform that combines strategy generation, content creation, AND distribution automation in one place. While other tools just generate content, we analyze your market, create your strategy, produce platform-optimized content, and automatically distribute it for maximum reach.",
   },
   {
-    question: "Do I need tech skills to use Momentum AI?",
+    question: "Do I need tech skills to use Momentum AI Creator?",
     answer:
-      "Absolutely not. Our interface is designed for creators, not engineers. If you can type an idea or record a voice note, you can use Momentum AI. Our Neural Strategist guides you through every step.",
+      "Absolutely not. Our interface is designed for creators, not engineers. If you can type an idea or record a voice note, you can use Momentum AI Creator. Our Neural Strategist guides you through every step.",
   },
   {
     question: "Can I cancel anytime?",
@@ -25,7 +25,7 @@ const faqs = [
   {
     question: "What happens when I hit $1M in revenue?",
     answer:
-      "First, congratulations! When you cross $1M/year in revenue generated through Momentum AI, we take a 20% platform fee on revenue above that threshold. This aligns our success with yours — we only win when you're winning big.",
+      "First, congratulations! When you cross $1M/year in revenue generated through Momentum AI Creator, we take a 20% platform fee on revenue above that threshold. This aligns our success with yours — we only win when you're winning big.",
   },
   {
     question: "Is my data secure?",
@@ -61,7 +61,7 @@ const FAQ = () => {
             Frequently Asked Questions
           </h2>
           <p className="text-xl text-muted-foreground">
-            Everything you need to know about Momentum AI
+            Everything you need to know about Momentum AI Creator
           </p>
         </motion.div>
 

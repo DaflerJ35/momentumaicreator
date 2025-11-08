@@ -108,7 +108,7 @@ const PricingSection = () => {
             Find the Plan That's Right for You
           </h2>
           <p className="text-xl text-muted-foreground mb-8">
-            Unlock the full power of Momentum AI and accelerate your growth
+            Unlock the full power of Momentum AI Creator and accelerate your growth
           </p>
 
           <div className="inline-flex items-center gap-4 glass-morphism p-2 rounded-xl mb-8">
@@ -155,7 +155,7 @@ const PricingSection = () => {
           >
             <h3 className="text-xl font-bold mb-3 gradient-text">Creator-First Pledge</h3>
             <p className="text-muted-foreground leading-relaxed">
-              We're invested in your success. Monetization features through Momentum AI are{" "}
+              We're invested in your success. Monetization features through Momentum AI Creator are{" "}
               <span className="text-neon-blue font-semibold">free until you're earning over $1,000,000/year</span>{" "}
               on-platform. We only succeed when you're massively successful, taking a 20% platform fee only after
               you've hit that milestone.

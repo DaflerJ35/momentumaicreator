@@ -9,7 +9,7 @@ const Footer = () => {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-8">
           <div>
             <div className="text-2xl font-bold gradient-text mb-4">
-              MOMENTUM.AI
+              Momentum AI Creator
             </div>
             <p className="text-muted-foreground mb-4">
               Built for creators who refuse to settle
@@ -73,7 +73,7 @@ const Footer = () => {
         </div>
 
         <div className="border-t border-border/50 pt-8 text-center text-muted-foreground">
-          <p>&copy; {new Date().getFullYear()} Momentum AI. Built for creators who refuse to settle.</p>
+          <p>&copy; {new Date().getFullYear()} Momentum AI Creator. Built for creators who refuse to settle.</p>
         </div>
       </div>
     </footer>
