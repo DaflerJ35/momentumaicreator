@@ -157,6 +157,13 @@ const Pricing = () => {
   const navigate = useNavigate();
 
   const handleUpgrade = async (planKey) => {
+    // REQUIRE AUTHENTICATION FOR ALL PLANS
+    if (!currentUser) {
+      toast.error('Please sign in to continue');
+      navigate('/auth/signin', { state: { showAuth: true } });
+      return;
+    }
+
     if (planKey === 'businessPlus') {
       setShowBusinessPlusModal(true);
       return;
@@ -167,23 +174,9 @@ const Pricing = () => {
       key: planKey
     });
     
-    if (planKey === 'free') {
-      setIsLoading(true);
-      try {
-        // In a real app, you would call your API to update the user's plan
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        toast.success('Successfully switched to the Free plan');
-        // Refresh user data or update context
-      } catch (error) {
-        console.error('Error updating plan:', error);
-        toast.error('Failed to update plan. Please try again.');
-      } finally {
-        setIsLoading(false);
-      }
-    } else {
-      // For paid plans, open the upgrade modal
-      setIsModalOpen(true);
-    }
+    // ALL PLANS (including free) require credit card and go through checkout
+    // This ensures we have payment method on file to prevent abuse
+    setIsModalOpen(true);
   };
 
   const calculateBusinessPlusPrice = () => {
@@ -262,7 +255,7 @@ const Pricing = () => {
             Simple, Transparent Pricing
           </h1>
           <p className="text-lg text-slate-400 max-w-3xl mx-auto">
-            Choose the plan that's right for you. All plans come with a 14-day free trial. No credit card required.
+            Choose the plan that's right for you. All plans require a payment method for account security. Free plan never charges.
           </p>
           
           <div className="mt-8 flex justify-center">
@@ -427,7 +420,7 @@ const Pricing = () => {
               },
               {
                 question: 'Is there a free trial?',
-                answer: 'Yes, all paid plans come with a 14-day free trial. No credit card is required to start your trial.'
+                answer: 'Yes, we offer a free plan that requires a payment method for account security. No charges will be made for the free plan. Paid plans also offer trials.'
               },
               {
                 question: 'What happens if I exceed my plan limits?',
@@ -575,7 +568,7 @@ const Pricing = () => {
             setBusinessPlusAddOns({});
           }}
           plan={selectedPlan}
-          billingCycle={selectedPlan.billingCycle || billingCycle}
+          billingCycle={billingCycle}
           onSuccess={handleUpgradeSuccess}
         />
       )}

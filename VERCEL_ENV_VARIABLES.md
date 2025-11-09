@@ -52,7 +52,7 @@ VITE_GOOGLE_GENERATIVE_AI_API_KEY=your_gemini_api_key
 
 ### Stripe (Required if using payments)
 ```
-VITE_STRIPE_PUBLISHABLE_KEY=pk_live_YOUR_STRIPE_PUBLISHABLE_KEY_HERE
+VITE_STRIPE_PUBLISHABLE_KEY=your_stripe_publishable_key_here
 ```
 
 ### App Configuration (Optional)
@@ -63,8 +63,8 @@ VITE_APP_URL=https://yourdomain.com
 ### Backend/Server Variables (Required for API routes and Stripe)
 ```
 NODE_ENV=production
-STRIPE_SECRET_KEY=YOUR_STRIPE_SECRET_KEY_HERE
-STRIPE_WEBHOOK_SECRET=YOUR_WEBHOOK_SECRET_HERE
+STRIPE_SECRET_KEY=your_stripe_secret_key_here
+STRIPE_WEBHOOK_SECRET=your_webhook_secret_here
 STRIPE_MONTHLY_PRO_PRICE_ID=price_xxxxxxxxxxxxxxxxxxxxxxxx
 STRIPE_MONTHLY_BUSINESS_PRICE_ID=price_xxxxxxxxxxxxxxxxxxxxxxxx
 STRIPE_MONTHLY_BUSINESS_PLUS_PRICE_ID=price_xxxxxxxxxxxxxxxxxxxxxxxx

@@ -104,7 +104,7 @@ const securityHeaders = (req, res, next) => {
     objectSrc: ["'none'"],
     baseUri: ["'self'"],
     formAction: ["'self'"],
-    upgradeInsecureRequests: isProduction ? [] : null,
+    upgradeInsecureRequests: isProduction ? ['upgrade-insecure-requests'] : null,
   };
 
   // Build CSP string

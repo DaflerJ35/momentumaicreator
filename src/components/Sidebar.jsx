@@ -138,6 +138,7 @@ const Sidebar = ({ isOpen, onToggle, routes = [] }) => {
   const navigate = useNavigate();
   const { currentUser, logout } = useAuth();
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const [isHovered, setIsHovered] = useState(false);
   const [activeSection, setActiveSection] = useState('general');
   
   // Filter routes based on authentication status
@@ -197,7 +198,17 @@ const Sidebar = ({ isOpen, onToggle, routes = [] }) => {
       <motion.div
         initial={false}
         animate={{
-          width: isOpen ? '16rem' : isCollapsed ? '5rem' : '16rem',
+          width: isOpen 
+            ? (isHovered && isCollapsed ? '16rem' : isCollapsed ? '5rem' : '16rem')
+            : (isCollapsed ? (isHovered ? '16rem' : '5rem') : '16rem'),
+        }}
+        onMouseEnter={() => {
+          if (isCollapsed) {
+            setIsHovered(true);
+          }
+        }}
+        onMouseLeave={() => {
+          setIsHovered(false);
         }}
         className={`fixed inset-y-0 left-0 z-50 flex flex-col border-r border-slate-800 bg-slate-900 transition-all duration-300 ease-in-out ${
           isOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
@@ -206,7 +217,7 @@ const Sidebar = ({ isOpen, onToggle, routes = [] }) => {
         <div className="flex flex-col flex-1 overflow-y-auto">
           {/* Logo and collapse button */}
           <div className="flex items-center justify-between h-16 px-4 border-b border-slate-800">
-            {!isCollapsed && (
+            {(isHovered || !isCollapsed) && (
               <Link to="/" className="flex items-center gap-2">
                 <img 
                   src="/momentum-logo.png" 
@@ -221,7 +232,7 @@ const Sidebar = ({ isOpen, onToggle, routes = [] }) => {
                 </span>
               </Link>
             )}
-            {isCollapsed && (
+            {isCollapsed && !isHovered && (
               <Link to="/" className="flex items-center justify-center w-full">
                 <img 
                   src="/momentum-logo.png" 
@@ -260,7 +271,7 @@ const Sidebar = ({ isOpen, onToggle, routes = [] }) => {
           <nav className="flex-1 px-2 py-4 space-y-6 overflow-y-auto">
             {sections.map((section) => (
               <div key={section.id} className="space-y-1">
-                {!isCollapsed && (
+                {(isHovered || !isCollapsed) && (
                   <h3 className="px-3 text-xs font-semibold tracking-wider text-slate-500 uppercase flex items-center">
                     <section.icon className="h-3.5 w-3.5 mr-2 text-slate-500" />
                     {section.title}
@@ -279,7 +290,7 @@ const Sidebar = ({ isOpen, onToggle, routes = [] }) => {
                           icon: Icon,
                           title: item.title || item.path.split('/').pop()
                         }}
-                        isCollapsed={isCollapsed}
+                        isCollapsed={isCollapsed && !isHovered}
                         isActive={isActive}
                         onClick={() => {}}
                       />
@@ -293,8 +304,8 @@ const Sidebar = ({ isOpen, onToggle, routes = [] }) => {
           {/* User section */}
           <div className="border-t border-slate-800 p-4">
             {currentUser ? (
-              <div className={isCollapsed ? 'flex flex-col items-center' : 'space-y-2'}>
-                {!isCollapsed && (
+              <div className={(isCollapsed && !isHovered) ? 'flex flex-col items-center' : 'space-y-2'}>
+                {(isHovered || !isCollapsed) && (
                   <div className="px-3 py-2 text-xs font-medium text-slate-500 uppercase">
                     Account
                   </div>
@@ -302,9 +313,9 @@ const Sidebar = ({ isOpen, onToggle, routes = [] }) => {
                 <div className="space-y-2">
                   <button
                     onClick={handleLogout}
-                    className="w-full flex items-center justify-center px-4 py-2 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-emerald-600 hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500"
+                    className={`w-full flex items-center ${(isCollapsed && !isHovered) ? 'justify-center' : 'justify-center'} px-4 py-2 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-emerald-600 hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500`}
                   >
-                    Sign out
+                    {(isHovered || !isCollapsed) ? 'Sign out' : <LogoutIcon className="h-5 w-5" />}
                   </button>
                 </div>
               </div>
@@ -312,19 +323,21 @@ const Sidebar = ({ isOpen, onToggle, routes = [] }) => {
               <div className="space-y-2">
                 <Link
                   to="/auth/signin"
-                  className="w-full flex items-center justify-center px-4 py-2 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-emerald-600 hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500"
+                  className={`w-full flex items-center justify-center px-4 py-2 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-emerald-600 hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500`}
                 >
-                  Sign in
+                  {(isHovered || !isCollapsed) ? 'Sign in' : <UserIcon className="h-5 w-5" />}
                 </Link>
-                <p className="text-xs text-center text-slate-400">
-                  New user?{' '}
-                  <Link
-                    to="/auth/signup"
-                    className="font-medium text-emerald-400 hover:text-emerald-300"
-                  >
-                    Create account
-                  </Link>
-                </p>
+                {(isHovered || !isCollapsed) && (
+                  <p className="text-xs text-center text-slate-400">
+                    New user?{' '}
+                    <Link
+                      to="/auth/signup"
+                      className="font-medium text-emerald-400 hover:text-emerald-300"
+                    >
+                      Create account
+                    </Link>
+                  </p>
+                )}
               </div>
             )}
           </div>

@@ -20,14 +20,26 @@ const getApiUrl = () => {
 const API_URL = getApiUrl();
 
 /**
- * Get Firebase ID token for authentication
+ * Get Firebase ID token for authentication with automatic refresh
+ * Handles token expiration and refresh automatically
  */
-async function getAuthToken() {
+async function getAuthToken(forceRefresh = false) {
   const currentUser = auth.currentUser;
   if (!currentUser) {
     throw new Error('User not authenticated');
   }
-  return await currentUser.getIdToken();
+  
+  try {
+    // Get token (force refresh if requested)
+    const token = await currentUser.getIdToken(forceRefresh);
+    return token;
+  } catch (error) {
+    // If token refresh fails, user might need to re-authenticate
+    if (error.code === 'auth/user-token-expired' || error.code === 'auth/user-disabled') {
+      throw new Error('Your session has expired. Please sign in again.');
+    }
+    throw error;
+  }
 }
 
 /**
@@ -37,7 +49,17 @@ async function getAuthToken() {
  * @returns {Promise<Response>}
  */
 export async function apiRequest(endpoint, options = {}) {
-  const token = await getAuthToken();
+  let token;
+  try {
+    token = await getAuthToken();
+  } catch (error) {
+    // If token retrieval fails, redirect to login
+    if (error.message.includes('authenticated') || error.message.includes('expired')) {
+      window.location.href = '/auth/signin?redirect=' + encodeURIComponent(window.location.pathname);
+      throw error;
+    }
+    throw error;
+  }
   
   const url = endpoint.startsWith('http') ? endpoint : `${API_URL}${endpoint}`;
   
@@ -47,14 +69,35 @@ export async function apiRequest(endpoint, options = {}) {
     ...options.headers
   };
 
-  const response = await fetch(url, {
+  let response = await fetch(url, {
     ...options,
     headers
   });
 
+  // Handle 401 Unauthorized - token might be expired, try refreshing
+  if (response.status === 401) {
+    try {
+      // Try refreshing token once
+      token = await getAuthToken(true); // Force refresh
+      headers['Authorization'] = `Bearer ${token}`;
+      response = await fetch(url, {
+        ...options,
+        headers
+      });
+    } catch (refreshError) {
+      // If refresh fails, redirect to login
+      if (refreshError.message.includes('expired') || refreshError.message.includes('authenticated')) {
+        window.location.href = '/auth/signin?redirect=' + encodeURIComponent(window.location.pathname);
+      }
+      throw refreshError;
+    }
+  }
+
   if (!response.ok) {
     const error = await response.json().catch(() => ({ error: 'Request failed' }));
-    throw new Error(error.error || `Request failed: ${response.statusText}`);
+    // Don't expose sensitive error details
+    const errorMessage = error.error || error.message || `Request failed: ${response.statusText}`;
+    throw new Error(errorMessage);
   }
 
   return response;
@@ -79,7 +122,16 @@ export async function apiRequestJson(endpoint, options = {}) {
  * @returns {Promise<Response>}
  */
 export async function apiRequestFormData(endpoint, formData, options = {}) {
-  const token = await getAuthToken();
+  let token;
+  try {
+    token = await getAuthToken();
+  } catch (error) {
+    if (error.message.includes('authenticated') || error.message.includes('expired')) {
+      window.location.href = '/auth/signin?redirect=' + encodeURIComponent(window.location.pathname);
+      throw error;
+    }
+    throw error;
+  }
   
   const url = endpoint.startsWith('http') ? endpoint : `${API_URL}${endpoint}`;
   
@@ -91,16 +143,36 @@ export async function apiRequestFormData(endpoint, formData, options = {}) {
   // Don't set Content-Type for FormData, browser will set it with boundary
   delete headers['Content-Type'];
 
-  const response = await fetch(url, {
+  let response = await fetch(url, {
     ...options,
     method: options.method || 'POST',
     headers,
     body: formData
   });
 
+  // Handle 401 Unauthorized - token might be expired
+  if (response.status === 401) {
+    try {
+      token = await getAuthToken(true); // Force refresh
+      headers['Authorization'] = `Bearer ${token}`;
+      response = await fetch(url, {
+        ...options,
+        method: options.method || 'POST',
+        headers,
+        body: formData
+      });
+    } catch (refreshError) {
+      if (refreshError.message.includes('expired') || refreshError.message.includes('authenticated')) {
+        window.location.href = '/auth/signin?redirect=' + encodeURIComponent(window.location.pathname);
+      }
+      throw refreshError;
+    }
+  }
+
   if (!response.ok) {
     const error = await response.json().catch(() => ({ error: 'Request failed' }));
-    throw new Error(error.error || `Request failed: ${response.statusText}`);
+    const errorMessage = error.error || error.message || `Request failed: ${response.statusText}`;
+    throw new Error(errorMessage);
   }
 
   return response;

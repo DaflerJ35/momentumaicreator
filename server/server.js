@@ -192,14 +192,68 @@ app.use((req, res, next) => {
   next();
 });
 
+// Cache for free product/price IDs (created once, reused)
+let freeProductId = null;
+let freePriceId = null;
+
+// Helper function to get or create free product and price
+const getFreeProductAndPrice = async () => {
+  try {
+    // Return cached values if available
+    if (freeProductId && freePriceId) {
+      return { productId: freeProductId, priceId: freePriceId };
+    }
+
+    // Check if free product already exists
+    const products = await stripe.products.list({ limit: 100, active: true });
+    let freeProduct = products.data.find(p => p.name === 'Free Momentum' || p.metadata?.plan === 'free');
+    
+    if (!freeProduct) {
+      // Create free product
+      freeProduct = await stripe.products.create({
+        name: 'Free Momentum',
+        description: 'Free plan with limited features',
+        metadata: { plan: 'free' }
+      });
+    }
+    
+    freeProductId = freeProduct.id;
+
+    // Check if $0 price exists for this product
+    const prices = await stripe.prices.list({ product: freeProductId, active: true, limit: 100 });
+    let freePrice = prices.data.find(p => p.unit_amount === 0 && p.recurring?.interval === 'month');
+    
+    if (!freePrice) {
+      // Create $0 price for free product
+      freePrice = await stripe.prices.create({
+        product: freeProductId,
+        unit_amount: 0,
+        currency: 'usd',
+        recurring: {
+          interval: 'month',
+        },
+        metadata: { plan: 'free' }
+      });
+    }
+    
+    freePriceId = freePrice.id;
+    
+    return { productId: freeProductId, priceId: freePriceId };
+  } catch (error) {
+    logger.error('Error getting/creating free product:', error);
+    throw error;
+  }
+};
+
 // Product IDs - Must match the plans offered in src/pages/pricing/Pricing.jsx
-// Plans: free (no product ID), pro, business, businessPlus
+// Plans: free (created automatically), pro, business, businessPlus
 const PRODUCT_IDS = {
   pro: 'prod_TJIyRjl3xWWHRt',
   business: 'prod_TJIukefoISDIo5',
   businessPlus: 'prod_TAyrTk8MJeKZaS',
   // Note: businessPlus is marked as 'custom' in the UI with "Contact Sales" CTA,
   // but we maintain price IDs in case it's offered as a direct purchase option
+  // Free product is created automatically via getFreeProductAndPrice()
 };
 
 // Price IDs from your Stripe dashboard
@@ -234,6 +288,65 @@ app.post('/api/create-checkout-session', async (req, res) => {
 
   const { plan, billingCycle, customerEmail, selectedAddOns = [], finalPrice } = req.body;
   
+  // REQUIRE AUTHENTICATION - Verify Firebase token
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ 
+        error: 'Authentication required',
+        message: 'Please sign in to continue with your subscription'
+      });
+    }
+    
+    const idToken = authHeader.split('Bearer ')[1];
+    const admin = require('./firebaseAdmin');
+    
+    // Check if Firebase Admin is initialized
+    if (!admin.apps || admin.apps.length === 0) {
+      logger.error('Firebase Admin not initialized');
+      return res.status(503).json({ 
+        error: 'Authentication service unavailable',
+        message: 'Please try again later'
+      });
+    }
+    
+    const decodedToken = await admin.auth().verifyIdToken(idToken);
+    req.user = {
+      uid: decodedToken.uid,
+      email: decodedToken.email,
+      emailVerified: decodedToken.email_verified,
+    };
+    
+    // Use authenticated user's email if customerEmail not provided
+    const emailToUse = customerEmail || decodedToken.email;
+    if (!emailToUse) {
+      return res.status(400).json({ 
+        error: 'Email required',
+        message: 'Email address is required for checkout'
+      });
+    }
+  } catch (authError) {
+    logger.error('Authentication error in checkout:', authError);
+    
+    // Provide more specific error messages
+    if (authError.code === 'auth/id-token-expired') {
+      return res.status(401).json({ 
+        error: 'Session expired',
+        message: 'Please sign in again to continue'
+      });
+    } else if (authError.code === 'auth/id-token-revoked') {
+      return res.status(401).json({ 
+        error: 'Session revoked',
+        message: 'Please sign in again to continue'
+      });
+    }
+    
+    return res.status(401).json({ 
+      error: 'Authentication failed',
+      message: 'Please sign in to continue with your subscription'
+    });
+  }
+  
   try {
     // Handle Business Plus with custom add-ons
     if (plan === 'businessPlus' && finalPrice) {
@@ -265,29 +378,72 @@ app.post('/api/create-checkout-session', async (req, res) => {
         quantity: 1,
       }];
       
+    const session = await stripe.checkout.sessions.create({
+      payment_method_types: ['card'],
+      line_items: lineItems,
+      mode: 'subscription',
+      automatic_tax: { enabled: true },
+      // REQUIRE PAYMENT METHOD for ALL plans (including free) to prevent abuse
+      payment_method_collection: 'always',
+      // For free plans, set trial period but still require card
+      subscription_data: plan === 'free' ? {
+        trial_period_days: 14,
+        trial_settings: {
+          end_behavior: {
+            missing_payment_method: 'cancel'
+          }
+        }
+      } : undefined,
+      success_url: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/dashboard?payment=success&session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/pricing?payment=cancelled`,
+      customer_email: customerEmail || req.user.email,
+      metadata: {
+        plan,
+        billing_cycle: billingCycle,
+        product_id: PRODUCT_IDS[plan] || '',
+        add_ons: JSON.stringify(selectedAddOns),
+        base_price: basePrice.toString(),
+        add_ons_total: addOnsTotal.toString(),
+        final_price: finalPrice.toString(),
+        user_id: req.user.uid,
+      }
+    });
+
+      res.json({ sessionId: session.id });
+      return;
+    }
+    
+    // Handle free plan - create $0 subscription with payment method required
+    if (plan === 'free') {
+      // Get or create free product and price
+      const { priceId } = await getFreeProductAndPrice();
+      
       const session = await stripe.checkout.sessions.create({
         payment_method_types: ['card'],
-        line_items: lineItems,
+        line_items: [{
+          price: priceId, // Use the $0 price ID
+          quantity: 1,
+        }],
         mode: 'subscription',
-        automatic_tax: { enabled: true },
+        payment_method_collection: 'always', // REQUIRE payment method
+        // Free plan: $0 subscription that never charges (effectively free forever)
+        subscription_data: {
+          // No trial needed since it's $0, but we require payment method
+        },
         success_url: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/dashboard?payment=success&session_id={CHECKOUT_SESSION_ID}`,
         cancel_url: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/pricing?payment=cancelled`,
-        customer_email: customerEmail,
+        customer_email: customerEmail || req.user.email,
         metadata: {
-          plan,
+          plan: 'free',
           billing_cycle: billingCycle,
-          product_id: PRODUCT_IDS[plan] || '',
-          add_ons: JSON.stringify(selectedAddOns),
-          base_price: basePrice.toString(),
-          add_ons_total: addOnsTotal.toString(),
-          final_price: finalPrice.toString()
+          user_id: req.user.uid,
         }
       });
 
       res.json({ sessionId: session.id });
       return;
     }
-    
+
     // Standard plan handling
     const priceId = PRICE_IDS[billingCycle]?.[plan];
     
@@ -300,7 +456,7 @@ app.post('/api/create-checkout-session', async (req, res) => {
           : 'The selected plan and billing cycle combination is not available.'
       });
     }
-
+    
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
       line_items: [
@@ -311,13 +467,16 @@ app.post('/api/create-checkout-session', async (req, res) => {
       ],
       mode: 'subscription',
       automatic_tax: { enabled: true },
+      // REQUIRE PAYMENT METHOD for ALL plans to prevent abuse
+      payment_method_collection: 'always',
       success_url: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/dashboard?payment=success&session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/pricing?payment=cancelled`,
-      customer_email: customerEmail,
+      customer_email: customerEmail || req.user.email,
       metadata: {
         plan,
         billing_cycle: billingCycle,
-        product_id: PRODUCT_IDS[plan] || ''
+        product_id: PRODUCT_IDS[plan] || '',
+        user_id: req.user.uid,
       }
     });
 
@@ -348,105 +507,319 @@ const blogRoutes = require('./routes/blog');
 const newsletterRoutes = require('./routes/newsletter');
 
 // AI API Endpoints
-// Generate content
+// Generate content - REQUIRES AUTHENTICATION
 app.post('/api/ai/generate', async (req, res) => {
+  // Require authentication
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ 
+        error: 'Authentication required',
+        message: 'Please sign in to use AI features'
+      });
+    }
+    
+    const idToken = authHeader.split('Bearer ')[1];
+    
+    // Get Firebase Admin (it should already be initialized via firebaseAdmin.js)
+    const admin = require('firebase-admin');
+    
+    // Check if Firebase Admin is initialized
+    if (!admin.apps || admin.apps.length === 0) {
+      logger.warn('Firebase Admin not initialized - authentication will fail');
+      return res.status(503).json({ 
+        error: 'Authentication service unavailable',
+        message: 'Please try again later'
+      });
+    }
+    
+    // Verify the token
+    const decodedToken = await admin.auth().verifyIdToken(idToken);
+    req.user = {
+      uid: decodedToken.uid,
+      email: decodedToken.email,
+    };
+  } catch (authError) {
+    logger.error('AI generation auth error:', authError);
+    if (authError.code === 'auth/id-token-expired') {
+      return res.status(401).json({ 
+        error: 'Session expired',
+        message: 'Please sign in again'
+      });
+    }
+    return res.status(401).json({ 
+      error: 'Authentication failed',
+      message: 'Please sign in to use AI features'
+    });
+  }
+  
   const { prompt, model, temperature, maxTokens, provider } = req.body;
   
   try {
-    // Input validation
-    if (!prompt || typeof prompt !== 'string' || prompt.trim().length === 0) {
-      return res.status(400).json({ error: 'Prompt is required and must be a non-empty string' });
+    // Input validation and sanitization
+    if (!prompt || typeof prompt !== 'string') {
+      return res.status(400).json({ error: 'Prompt is required and must be a string' });
+    }
+    
+    // Sanitize prompt - remove null bytes and trim
+    const sanitizedPrompt = prompt.replace(/\0/g, '').trim();
+    
+    if (sanitizedPrompt.length === 0) {
+      return res.status(400).json({ error: 'Prompt cannot be empty' });
     }
     
     // Sanitize prompt length
-    if (prompt.length > 10000) {
+    if (sanitizedPrompt.length > 10000) {
       return res.status(400).json({ error: 'Prompt is too long. Maximum length is 10,000 characters.' });
     }
     
     // Validate temperature if provided
-    if (temperature !== undefined && (temperature < 0 || temperature > 2)) {
-      return res.status(400).json({ error: 'Temperature must be between 0 and 2' });
+    if (temperature !== undefined) {
+      const temp = parseFloat(temperature);
+      if (isNaN(temp) || temp < 0 || temp > 2) {
+        return res.status(400).json({ error: 'Temperature must be a number between 0 and 2' });
+      }
     }
     
     // Validate maxTokens if provided
-    if (maxTokens !== undefined && (maxTokens < 1 || maxTokens > 8000)) {
-      return res.status(400).json({ error: 'Max tokens must be between 1 and 8000' });
+    if (maxTokens !== undefined) {
+      const tokens = parseInt(maxTokens);
+      if (isNaN(tokens) || tokens < 1 || tokens > 8000) {
+        return res.status(400).json({ error: 'Max tokens must be a number between 1 and 8000' });
+      }
+    }
+    
+    // Validate provider if provided
+    if (provider && typeof provider !== 'string') {
+      return res.status(400).json({ error: 'Invalid provider' });
+    }
+    
+    // Validate model if provided
+    if (model && typeof model !== 'string') {
+      return res.status(400).json({ error: 'Invalid model' });
     }
 
-    const response = await aiService.generateContent(prompt, {
-      model,
-      temperature,
-      maxTokens,
-      provider
+    const response = await aiService.generateContent(sanitizedPrompt, {
+      model: model || undefined,
+      temperature: temperature !== undefined ? parseFloat(temperature) : undefined,
+      maxTokens: maxTokens !== undefined ? parseInt(maxTokens) : undefined,
+      provider: provider || undefined
     });
 
     res.json({ content: response });
   } catch (error) {
-    // Log full error details for debugging
-    logger.error('AI generation error', { error: error.message, stack: error.stack });
+    // Log full error details for debugging (server-side only)
+    logger.error('AI generation error', { 
+      error: error.message, 
+      stack: error.stack,
+      userId: req.user?.uid 
+    });
     // Don't expose technical error details to users
     res.status(500).json({ error: 'Failed to generate content. Please try again.' });
   }
 });
 
-// Generate structured content (JSON)
+// Generate structured content (JSON) - REQUIRES AUTHENTICATION
 app.post('/api/ai/generate-structured', async (req, res) => {
+  // Require authentication
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ 
+        error: 'Authentication required',
+        message: 'Please sign in to use AI features'
+      });
+    }
+    
+    const idToken = authHeader.split('Bearer ')[1];
+    
+    // Get Firebase Admin (it should already be initialized via firebaseAdmin.js)
+    const admin = require('firebase-admin');
+    
+    // Check if Firebase Admin is initialized
+    if (!admin.apps || admin.apps.length === 0) {
+      logger.warn('Firebase Admin not initialized - authentication will fail');
+      return res.status(503).json({ 
+        error: 'Authentication service unavailable',
+        message: 'Please try again later'
+      });
+    }
+    
+    // Verify the token
+    const decodedToken = await admin.auth().verifyIdToken(idToken);
+    req.user = {
+      uid: decodedToken.uid,
+      email: decodedToken.email,
+    };
+  } catch (authError) {
+    logger.error('AI structured generation auth error:', authError);
+    if (authError.code === 'auth/id-token-expired') {
+      return res.status(401).json({ 
+        error: 'Session expired',
+        message: 'Please sign in again'
+      });
+    }
+    return res.status(401).json({ 
+      error: 'Authentication failed',
+      message: 'Please sign in to use AI features'
+    });
+  }
+  
   const { prompt, schema, model, temperature, maxTokens, provider } = req.body;
   
   try {
-    // Input validation
-    if (!prompt || typeof prompt !== 'string' || prompt.trim().length === 0) {
-      return res.status(400).json({ error: 'Prompt is required and must be a non-empty string' });
+    // Input validation and sanitization
+    if (!prompt || typeof prompt !== 'string') {
+      return res.status(400).json({ error: 'Prompt is required and must be a string' });
     }
     
-    if (!schema || typeof schema !== 'object') {
-      return res.status(400).json({ error: 'Schema is required and must be a valid object' });
+    // Sanitize prompt
+    const sanitizedPrompt = prompt.replace(/\0/g, '').trim();
+    
+    if (sanitizedPrompt.length === 0) {
+      return res.status(400).json({ error: 'Prompt cannot be empty' });
     }
     
-    // Sanitize prompt length
-    if (prompt.length > 10000) {
+    if (sanitizedPrompt.length > 10000) {
       return res.status(400).json({ error: 'Prompt is too long. Maximum length is 10,000 characters.' });
     }
     
+    if (!schema || typeof schema !== 'object' || Array.isArray(schema)) {
+      return res.status(400).json({ error: 'Schema is required and must be a valid object' });
+    }
+    
+    // Validate schema is not too large (prevent DoS)
+    const schemaString = JSON.stringify(schema);
+    if (schemaString.length > 50000) {
+      return res.status(400).json({ error: 'Schema is too large. Maximum size is 50KB.' });
+    }
+    
     // Validate temperature if provided
-    if (temperature !== undefined && (temperature < 0 || temperature > 2)) {
-      return res.status(400).json({ error: 'Temperature must be between 0 and 2' });
+    if (temperature !== undefined) {
+      const temp = parseFloat(temperature);
+      if (isNaN(temp) || temp < 0 || temp > 2) {
+        return res.status(400).json({ error: 'Temperature must be a number between 0 and 2' });
+      }
+    }
+    
+    // Validate maxTokens if provided
+    if (maxTokens !== undefined) {
+      const tokens = parseInt(maxTokens);
+      if (isNaN(tokens) || tokens < 1 || tokens > 8000) {
+        return res.status(400).json({ error: 'Max tokens must be a number between 1 and 8000' });
+      }
     }
 
-    const response = await aiService.generateStructuredContent(prompt, schema, {
-      model,
-      temperature,
-      maxTokens,
-      provider
+    const response = await aiService.generateStructuredContent(sanitizedPrompt, schema, {
+      model: model || undefined,
+      temperature: temperature !== undefined ? parseFloat(temperature) : undefined,
+      maxTokens: maxTokens !== undefined ? parseInt(maxTokens) : undefined,
+      provider: provider || undefined
     });
 
     res.json({ data: response });
   } catch (error) {
-    // Log full error details for debugging
-    logger.error('AI structured generation error', { error: error.message, stack: error.stack });
+    // Log full error details for debugging (server-side only)
+    logger.error('AI structured generation error', { 
+      error: error.message, 
+      stack: error.stack,
+      userId: req.user?.uid 
+    });
     // Don't expose technical error details to users
     res.status(500).json({ error: 'Failed to generate structured content. Please try again.' });
   }
 });
 
-// Stream content (Server-Sent Events)
+// Stream content (Server-Sent Events) - REQUIRES AUTHENTICATION
 app.post('/api/ai/stream', async (req, res) => {
+  // Require authentication
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ 
+        error: 'Authentication required',
+        message: 'Please sign in to use AI features'
+      });
+    }
+    
+    const idToken = authHeader.split('Bearer ')[1];
+    
+    // Get Firebase Admin (it should already be initialized via firebaseAdmin.js)
+    const admin = require('firebase-admin');
+    
+    // Check if Firebase Admin is initialized
+    if (!admin.apps || admin.apps.length === 0) {
+      logger.warn('Firebase Admin not initialized - authentication will fail');
+      return res.status(503).json({ 
+        error: 'Authentication service unavailable',
+        message: 'Please try again later'
+      });
+    }
+    
+    // Verify the token
+    const decodedToken = await admin.auth().verifyIdToken(idToken);
+    req.user = {
+      uid: decodedToken.uid,
+      email: decodedToken.email,
+    };
+  } catch (authError) {
+    logger.error('AI stream auth error:', authError);
+    if (authError.code === 'auth/id-token-expired') {
+      return res.status(401).json({ 
+        error: 'Session expired',
+        message: 'Please sign in again'
+      });
+    }
+    return res.status(401).json({ 
+      error: 'Authentication failed',
+      message: 'Please sign in to use AI features'
+    });
+  }
+  
   const { prompt, model, temperature, maxTokens, provider, jsonMode } = req.body;
   
   try {
-    // Input validation
-    if (!prompt || typeof prompt !== 'string' || prompt.trim().length === 0) {
-      return res.status(400).json({ error: 'Prompt is required and must be a non-empty string' });
+    // Input validation and sanitization
+    if (!prompt || typeof prompt !== 'string') {
+      return res.status(400).json({ error: 'Prompt is required and must be a string' });
+    }
+    
+    // Sanitize prompt
+    const sanitizedPrompt = prompt.replace(/\0/g, '').trim();
+    
+    if (sanitizedPrompt.length === 0) {
+      return res.status(400).json({ error: 'Prompt cannot be empty' });
     }
     
     // Sanitize prompt length
-    if (prompt.length > 10000) {
+    if (sanitizedPrompt.length > 10000) {
       return res.status(400).json({ error: 'Prompt is too long. Maximum length is 10,000 characters.' });
     }
     
     // Validate temperature if provided
-    if (temperature !== undefined && (temperature < 0 || temperature > 2)) {
-      return res.status(400).json({ error: 'Temperature must be between 0 and 2' });
+    if (temperature !== undefined) {
+      const temp = parseFloat(temperature);
+      if (isNaN(temp) || temp < 0 || temp > 2) {
+        return res.status(400).json({ error: 'Temperature must be a number between 0 and 2' });
+      }
+    }
+    
+    // Validate maxTokens if provided
+    if (maxTokens !== undefined) {
+      const tokens = parseInt(maxTokens);
+      if (isNaN(tokens) || tokens < 1 || tokens > 8000) {
+        return res.status(400).json({ error: 'Max tokens must be a number between 1 and 8000' });
+      }
+    }
+    
+    // Validate provider if provided
+    if (provider && typeof provider !== 'string') {
+      return res.status(400).json({ error: 'Invalid provider' });
+    }
+    
+    // Validate model if provided
+    if (model && typeof model !== 'string') {
+      return res.status(400).json({ error: 'Invalid model' });
     }
 
     // Set up SSE headers
@@ -495,12 +868,12 @@ app.post('/api/ai/stream', async (req, res) => {
     };
 
     try {
-      for await (const chunk of aiService.generateStreamingContent(prompt, {
-        model,
-        temperature,
-        maxTokens,
-        provider,
-        jsonMode,
+      for await (const chunk of aiService.generateStreamingContent(sanitizedPrompt, {
+        model: model || undefined,
+        temperature: temperature !== undefined ? parseFloat(temperature) : undefined,
+        maxTokens: maxTokens !== undefined ? parseInt(maxTokens) : undefined,
+        provider: provider || undefined,
+        jsonMode: jsonMode || false,
         signal: abortController.signal
       })) {
         // Check if client disconnected before writing
@@ -536,8 +909,12 @@ app.post('/api/ai/stream', async (req, res) => {
       res.end();
     }
   } catch (error) {
-    // Log full error details for debugging
-    logger.error('AI streaming error', { error: error.message, stack: error.stack });
+    // Log full error details for debugging (server-side only)
+    logger.error('AI streaming error', { 
+      error: error.message, 
+      stack: error.stack,
+      userId: req.user?.uid 
+    });
     // Don't expose technical error details to users
     if (!res.headersSent) {
       res.status(500).json({ error: 'Failed to stream content. Please try again.' });
@@ -545,22 +922,73 @@ app.post('/api/ai/stream', async (req, res) => {
   }
 });
 
-// Analyze image
+// Analyze image - REQUIRES AUTHENTICATION
 app.post('/api/ai/analyze-image', async (req, res) => {
+  // Require authentication
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ 
+        error: 'Authentication required',
+        message: 'Please sign in to use AI features'
+      });
+    }
+    
+    const idToken = authHeader.split('Bearer ')[1];
+    
+    // Get Firebase Admin (it should already be initialized via firebaseAdmin.js)
+    const admin = require('firebase-admin');
+    
+    // Check if Firebase Admin is initialized
+    if (!admin.apps || admin.apps.length === 0) {
+      logger.warn('Firebase Admin not initialized - authentication will fail');
+      return res.status(503).json({ 
+        error: 'Authentication service unavailable',
+        message: 'Please try again later'
+      });
+    }
+    
+    // Verify the token
+    const decodedToken = await admin.auth().verifyIdToken(idToken);
+    req.user = {
+      uid: decodedToken.uid,
+      email: decodedToken.email,
+    };
+  } catch (authError) {
+    logger.error('AI image analysis auth error:', authError);
+    if (authError.code === 'auth/id-token-expired') {
+      return res.status(401).json({ 
+        error: 'Session expired',
+        message: 'Please sign in again'
+      });
+    }
+    return res.status(401).json({ 
+      error: 'Authentication failed',
+      message: 'Please sign in to use AI features'
+    });
+  }
+  
   const { imageData, prompt } = req.body;
   
   try {
-    // Input validation
+    // Input validation and sanitization
     if (!imageData || typeof imageData !== 'string') {
       return res.status(400).json({ error: 'Image data is required and must be a valid string' });
     }
     
-    if (!prompt || typeof prompt !== 'string' || prompt.trim().length === 0) {
-      return res.status(400).json({ error: 'Prompt is required and must be a non-empty string' });
+    if (!prompt || typeof prompt !== 'string') {
+      return res.status(400).json({ error: 'Prompt is required and must be a string' });
+    }
+    
+    // Sanitize prompt
+    const sanitizedPrompt = prompt.replace(/\0/g, '').trim();
+    
+    if (sanitizedPrompt.length === 0) {
+      return res.status(400).json({ error: 'Prompt cannot be empty' });
     }
     
     // Sanitize prompt length
-    if (prompt.length > 1000) {
+    if (sanitizedPrompt.length > 1000) {
       return res.status(400).json({ error: 'Prompt is too long. Maximum length is 1,000 characters.' });
     }
     
@@ -568,18 +996,35 @@ app.post('/api/ai/analyze-image', async (req, res) => {
     if (!imageData.startsWith('data:image/') && !imageData.startsWith('http://') && !imageData.startsWith('https://')) {
       return res.status(400).json({ error: 'Invalid image data format' });
     }
+    
+    // Validate URL if it's a URL (prevent SSRF)
+    if (imageData.startsWith('http://') || imageData.startsWith('https://')) {
+      try {
+        const url = new URL(imageData);
+        // Block private IPs and localhost
+        if (url.hostname === 'localhost' || url.hostname === '127.0.0.1' || url.hostname.startsWith('192.168.') || url.hostname.startsWith('10.') || url.hostname.startsWith('172.')) {
+          return res.status(400).json({ error: 'Invalid image URL' });
+        }
+      } catch (urlError) {
+        return res.status(400).json({ error: 'Invalid image URL format' });
+      }
+    }
 
-    const response = await aiService.analyzeImage(imageData, prompt);
+    const response = await aiService.analyzeImage(imageData, sanitizedPrompt);
     res.json({ analysis: response });
   } catch (error) {
-    // Log full error details for debugging
-    logger.error('AI image analysis error', { error: error.message, stack: error.stack });
+    // Log full error details for debugging (server-side only)
+    logger.error('AI image analysis error', { 
+      error: error.message, 
+      stack: error.stack,
+      userId: req.user?.uid 
+    });
     // Don't expose technical error details to users
     res.status(500).json({ error: 'Failed to analyze image. Please try again.' });
   }
 });
 
-// Get available models
+// Get available models - PUBLIC endpoint (no auth required)
 app.get('/api/ai/models', (req, res) => {
   try {
     const models = aiService.getAvailableModels();
@@ -682,7 +1127,7 @@ function escapeHtml(text) {
   return text.replace(/[&<>"']/g, m => map[m]);
 }
 
-// Contact form endpoint with stricter rate limiting
+// Contact form endpoint with stricter rate limiting and input sanitization
 app.post('/api/contact', contactLimiter, async (req, res) => {
   const { name, email, company, phone, subject, message, _honeypot } = req.body;
   
@@ -698,42 +1143,59 @@ app.post('/api/contact', contactLimiter, async (req, res) => {
     if (!name || !email || !subject || !message) {
       return res.status(400).json({ 
         error: 'Missing required fields',
-        details: 'Name, email, subject, and message are required'
+        message: 'Name, email, subject, and message are required'
+      });
+    }
+
+    // Sanitize and validate inputs
+    const sanitizedName = String(name || '').trim().replace(/[<>]/g, '').slice(0, 100);
+    const sanitizedEmail = String(email || '').trim().toLowerCase().slice(0, 100);
+    const sanitizedSubject = String(subject || '').trim().toLowerCase();
+    const sanitizedMessage = String(message || '').trim().replace(/\0/g, '').slice(0, 5000);
+    const sanitizedCompany = company ? String(company).trim().replace(/[<>]/g, '').slice(0, 100) : '';
+    const sanitizedPhone = phone ? String(phone).trim().replace(/[^0-9+\-() ]/g, '').slice(0, 20) : '';
+
+    // Validate: Name cannot be empty after sanitization
+    if (sanitizedName.length === 0) {
+      return res.status(400).json({ 
+        error: 'Invalid name',
+        message: 'Please provide a valid name'
       });
     }
 
     // Validation: Email format
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
+    if (!emailRegex.test(sanitizedEmail)) {
       return res.status(400).json({ 
         error: 'Invalid email format',
-        details: 'Please provide a valid email address'
+        message: 'Please provide a valid email address'
       });
     }
 
-    // Validation: Field length limits
-    if (name.length > 100 || email.length > 100 || message.length > 5000) {
+    // Validation: Message cannot be empty after sanitization
+    if (sanitizedMessage.length === 0) {
       return res.status(400).json({ 
-        error: 'Field length exceeded',
-        details: 'One or more fields exceed maximum length'
+        error: 'Invalid message',
+        message: 'Message cannot be empty'
       });
     }
 
     // Validation: Subject must be from allowed list
     const allowedSubjects = ['general', 'sales', 'enterprise', 'support', 'partnership', 'other'];
-    if (!allowedSubjects.includes(subject)) {
+    if (!allowedSubjects.includes(sanitizedSubject)) {
       return res.status(400).json({ 
         error: 'Invalid subject',
-        details: 'Please select a valid subject'
+        message: 'Please select a valid subject'
       });
     }
 
-    // Log the contact form submission
+    // Log the contact form submission (use sanitized values)
     logger.info('Contact form submission received', {
-      name,
-      email,
-      company: company || 'N/A',
-      subject,
+      name: sanitizedName,
+      email: sanitizedEmail,
+      company: sanitizedCompany || 'N/A',
+      phone: sanitizedPhone || 'N/A',
+      subject: sanitizedSubject,
       ip: req.ip,
       userAgent: req.get('user-agent')
     });
@@ -755,27 +1217,27 @@ app.post('/api/contact', contactLimiter, async (req, res) => {
       const mailOptions = {
         from: `"${process.env.SMTP_FROM_NAME || 'Momentum AI Contact Form'}" <${process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER}>`,
         to: process.env.CONTACT_EMAIL || 'sales@momentumai.com',
-        replyTo: email,
-        subject: `Contact Form: ${subject} - from ${name}`,
+        replyTo: sanitizedEmail,
+        subject: `Contact Form: ${sanitizedSubject} - from ${sanitizedName}`,
         text: `
-Name: ${name}
-Email: ${email}
-Company: ${company || 'N/A'}
-Phone: ${phone || 'N/A'}
-Subject: ${subject}
+Name: ${sanitizedName}
+Email: ${sanitizedEmail}
+Company: ${sanitizedCompany || 'N/A'}
+Phone: ${sanitizedPhone || 'N/A'}
+Subject: ${sanitizedSubject}
 
 Message:
-${message}
+${sanitizedMessage}
         `,
         html: `
 <h2>New Contact Form Submission</h2>
-<p><strong>Name:</strong> ${escapeHtml(name)}</p>
-<p><strong>Email:</strong> <a href="mailto:${escapeHtml(email)}">${escapeHtml(email)}</a></p>
-<p><strong>Company:</strong> ${escapeHtml(company || 'N/A')}</p>
-<p><strong>Phone:</strong> ${escapeHtml(phone || 'N/A')}</p>
-<p><strong>Subject:</strong> ${escapeHtml(subject)}</p>
+<p><strong>Name:</strong> ${escapeHtml(sanitizedName)}</p>
+<p><strong>Email:</strong> <a href="mailto:${escapeHtml(sanitizedEmail)}">${escapeHtml(sanitizedEmail)}</a></p>
+<p><strong>Company:</strong> ${escapeHtml(sanitizedCompany || 'N/A')}</p>
+<p><strong>Phone:</strong> ${escapeHtml(sanitizedPhone || 'N/A')}</p>
+<p><strong>Subject:</strong> ${escapeHtml(sanitizedSubject)}</p>
 <h3>Message:</h3>
-<p>${escapeHtml(message).replace(/\n/g, '<br>')}</p>
+<p>${escapeHtml(sanitizedMessage).replace(/\n/g, '<br>')}</p>
         `
       };
 

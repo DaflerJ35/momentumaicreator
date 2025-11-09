@@ -48,8 +48,40 @@ const SignUp = () => {
       return;
     }
 
+    // Strong password validation
     if (formData.password.length < 8) {
       setError('Password must be at least 8 characters long');
+      return;
+    }
+    
+    // Check for at least one uppercase letter
+    if (!/[A-Z]/.test(formData.password)) {
+      setError('Password must contain at least one uppercase letter');
+      return;
+    }
+    
+    // Check for at least one lowercase letter
+    if (!/[a-z]/.test(formData.password)) {
+      setError('Password must contain at least one lowercase letter');
+      return;
+    }
+    
+    // Check for at least one number
+    if (!/[0-9]/.test(formData.password)) {
+      setError('Password must contain at least one number');
+      return;
+    }
+    
+    // Check for at least one special character
+    if (!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(formData.password)) {
+      setError('Password must contain at least one special character (!@#$%^&* etc.)');
+      return;
+    }
+    
+    // Check for common weak passwords
+    const commonPasswords = ['password', '12345678', 'qwerty', 'abc123', 'password123'];
+    if (commonPasswords.some(weak => formData.password.toLowerCase().includes(weak))) {
+      setError('Password is too weak. Please choose a stronger password');
       return;
     }
 

@@ -3,6 +3,9 @@ import { auth, database } from '../lib/firebase';
 import { 
   onAuthStateChanged, 
   signOut as firebaseSignOut,
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  sendEmailVerification,
   updateProfile as firebaseUpdateProfile,
   updateEmail as firebaseUpdateEmail,
   updatePassword as firebaseUpdatePassword,
@@ -10,8 +13,9 @@ import {
   reauthenticateWithCredential,
   deleteUser as firebaseDeleteUser
 } from 'firebase/auth';
-import { ref, update, remove } from 'firebase/database';
+import { ref, update, remove, set, get } from 'firebase/database';
 import { useNavigate } from 'react-router-dom';
+import { signInWithGoogle } from '../lib/firebase';
 
 export const AuthContext = createContext();
 
@@ -44,6 +48,147 @@ export const AuthProvider = ({ children }) => {
       setCurrentUser(null);
       setLoading(false);
       return () => {};
+    }
+  }, []);
+
+  // Sign in with email and password
+  const signIn = useCallback(async (email, password) => {
+    if (!auth || auth._isMock) {
+      throw new Error('Firebase is not configured. Please set up your .env file with Firebase credentials.');
+    }
+
+    // Sanitize email
+    const sanitizedEmail = email.trim().toLowerCase();
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(sanitizedEmail)) {
+      throw new Error('Invalid email address');
+    }
+
+    try {
+      const userCredential = await signInWithEmailAndPassword(auth, sanitizedEmail, password);
+      const user = userCredential.user;
+
+      // Update last login in database
+      if (database) {
+        const userRef = ref(database, `users/${user.uid}`);
+        const snapshot = await get(userRef);
+        if (snapshot.exists()) {
+          await update(userRef, {
+            lastLogin: Date.now(),
+          });
+        } else {
+          // Create user profile if it doesn't exist
+          await set(userRef, {
+            email: user.email,
+            displayName: user.displayName || '',
+            photoURL: user.photoURL || '',
+            createdAt: Date.now(),
+            lastLogin: Date.now(),
+          });
+        }
+      }
+
+      return user;
+    } catch (error) {
+      // Map Firebase errors to user-friendly messages (security: don't leak details)
+      if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
+        throw new Error('Invalid email or password');
+      } else if (error.code === 'auth/too-many-requests') {
+        throw new Error('Too many failed attempts. Please try again later.');
+      } else if (error.code === 'auth/user-disabled') {
+        throw new Error('This account has been disabled. Please contact support.');
+      } else if (error.code === 'auth/invalid-email') {
+        throw new Error('Invalid email address');
+      } else if (error.code === 'auth/network-request-failed') {
+        throw new Error('Network error. Please check your connection and try again.');
+      }
+      // Generic error for security (don't leak internal details)
+      if (import.meta.env.DEV) {
+        console.error('Error signing in:', error);
+      }
+      throw new Error('Failed to sign in. Please try again.');
+    }
+  }, [database]);
+
+  // Sign up with email and password
+  const signUp = useCallback(async (email, password, displayName = '') => {
+    if (!auth || auth._isMock) {
+      throw new Error('Firebase is not configured. Please set up your .env file with Firebase credentials.');
+    }
+
+    // Client-side password validation (server-side validation should also exist)
+    if (password.length < 8) {
+      throw new Error('Password must be at least 8 characters long');
+    }
+    if (!/[A-Z]/.test(password)) {
+      throw new Error('Password must contain at least one uppercase letter');
+    }
+    if (!/[a-z]/.test(password)) {
+      throw new Error('Password must contain at least one lowercase letter');
+    }
+    if (!/[0-9]/.test(password)) {
+      throw new Error('Password must contain at least one number');
+    }
+    if (!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password)) {
+      throw new Error('Password must contain at least one special character');
+    }
+
+    // Sanitize display name
+    const sanitizedDisplayName = displayName ? displayName.trim().slice(0, 100) : '';
+
+    try {
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      const user = userCredential.user;
+
+      // Update profile with display name
+      if (sanitizedDisplayName) {
+        await firebaseUpdateProfile(user, { displayName: sanitizedDisplayName });
+      }
+
+      // Send email verification
+      await sendEmailVerification(user);
+
+      // Create user profile in database
+      if (database) {
+        const userRef = ref(database, `users/${user.uid}`);
+        await set(userRef, {
+          email: user.email,
+          displayName: sanitizedDisplayName || user.displayName || '',
+          photoURL: user.photoURL || '',
+          createdAt: Date.now(),
+          lastLogin: Date.now(),
+          emailVerified: false,
+        });
+      }
+
+      return user;
+    } catch (error) {
+      // Don't expose Firebase error details to users
+      if (error.code === 'auth/email-already-in-use') {
+        throw new Error('This email is already registered. Please sign in instead.');
+      } else if (error.code === 'auth/invalid-email') {
+        throw new Error('Invalid email address. Please check your email and try again.');
+      } else if (error.code === 'auth/weak-password') {
+        throw new Error('Password is too weak. Please choose a stronger password.');
+      } else if (error.code === 'auth/operation-not-allowed') {
+        throw new Error('Email/password accounts are not enabled. Please contact support.');
+      }
+      // Generic error for security (don't leak internal details)
+      if (import.meta.env.DEV) {
+        console.error('Error signing up:', error);
+      }
+      throw new Error('Failed to create account. Please try again.');
+    }
+  }, [database]);
+
+  // Sign in with Google
+  const signInWithGoogleAuth = useCallback(async () => {
+    try {
+      const user = await signInWithGoogle();
+      return user;
+    } catch (error) {
+      console.error('Error signing in with Google:', error);
+      throw error;
     }
   }, []);
 
@@ -195,6 +340,9 @@ export const AuthProvider = ({ children }) => {
     currentUser,
     isAuthenticated: !!currentUser,
     loading,
+    signIn,
+    signUp,
+    signInWithGoogle: signInWithGoogleAuth,
     logout,
     updateProfile,
     updateEmail,

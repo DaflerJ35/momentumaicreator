@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useMemo } from 'react';
+import { useState, useRef, useCallback, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
@@ -148,13 +148,8 @@ const NeuralMultiplier = () => {
       throttle((value) => {
         setContent(value);
         setCharacterCount(value.length);
-        
-        // Auto-suggest if content is being typed
-        if (value.length > 10 && value.length % 30 === 0) {
-          generateSuggestions(value);
-        }
       }, 300),
-    [generateSuggestions]
+    []
   );
   
   // Clean up throttle on unmount
@@ -268,32 +263,6 @@ const NeuralMultiplier = () => {
     } finally {
       setIsSuggesting(false);
     }
-    try {
-      const prompt = `Generate 3 different variations or improvements for this content. Each should be concise and focus on a different angle. Content: "${text}"`;
-      const response = await generateContent({
-        prompt,
-        maxTokens: 150,
-        temperature: 0.8,
-      });
-      
-      // Parse the response into an array of suggestions
-      const suggestionList = response
-        .split('\n')
-        .filter(line => line.trim().length > 0 && !line.toLowerCase().includes('suggestion'))
-        .map(line => line.replace(/^\d+[.)\s]*/, '').trim())
-        .slice(0, 3);
-      
-      setSuggestions(suggestionList);
-    } catch (error) {
-      console.error('Error generating suggestions:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to generate suggestions. Please try again.',
-        variant: 'destructive',
-      });
-    } finally {
-      setIsSuggesting(false);
-    }
   }, [generateContent, isSuggesting, toast]);
   
   // Apply a suggestion to the content
@@ -301,6 +270,97 @@ const NeuralMultiplier = () => {
     setContent(suggestion);
     setSuggestions([]);
   }, []);
+
+  // Handle copy to clipboard
+  const handleCopy = useCallback(async (textToCopy = null) => {
+    const text = textToCopy || generatedContent[activeTab];
+    if (!text) return;
+    
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      toast({
+        title: 'Copied!',
+        description: 'Content copied to clipboard',
+      });
+      setTimeout(() => setCopied(false), 2000);
+    } catch (error) {
+      console.error('Failed to copy:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to copy to clipboard',
+        variant: 'destructive',
+      });
+    }
+  }, [generatedContent, activeTab, toast]);
+
+  // Handle generate content for all selected platforms
+  const handleGenerate = useCallback(async () => {
+    if (!content.trim() || selectedPlatforms.length === 0 || isGenerating) return;
+    
+    // Require authentication
+    if (!currentUser) {
+      toast({
+        title: 'Authentication Required',
+        description: 'Please sign in to use Neural Multiplier',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setIsGenerating(true);
+    setGeneratedContent({});
+    
+    try {
+      const results = {};
+      
+      // Generate content for each selected platform
+      for (const platformId of selectedPlatforms) {
+        const platform = platforms.find(p => p.id === platformId);
+        if (!platform) continue;
+        
+        try {
+          const transformed = await transformContent(content, platform.name, tone);
+          results[platformId] = transformed;
+        } catch (error) {
+          console.error(`Error generating for ${platform.name}:`, error);
+          results[platformId] = `Error generating content for ${platform.name}. Please try again.`;
+        }
+      }
+      
+      setGeneratedContent(results);
+      
+      // Set active tab to first platform
+      if (selectedPlatforms.length > 0) {
+        setActiveTab(selectedPlatforms[0]);
+      }
+      
+      // Save to history
+      const historyItem = {
+        id: uuidv4(),
+        content,
+        generatedContent: results,
+        platforms: selectedPlatforms,
+        tone,
+        timestamp: new Date().toISOString(),
+      };
+      setContentHistory(prev => [historyItem, ...prev.slice(0, 49)]); // Keep last 50
+      
+      toast({
+        title: 'Success!',
+        description: `Generated content for ${selectedPlatforms.length} platform(s)`,
+      });
+    } catch (error) {
+      console.error('Error generating content:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to generate content. Please try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsGenerating(false);
+    }
+  }, [content, selectedPlatforms, tone, isGenerating, currentUser, transformContent, toast]);
   
   // Apply a template to the content
   const applyTemplate = useCallback((templateKey) => {
@@ -727,6 +787,28 @@ const NeuralMultiplier = () => {
     </div>
   );
 
+  // Require authentication to use Neural Multiplier
+  if (!currentUser) {
+    return (
+      <div className="container mx-auto px-4 py-8">
+        <div className="max-w-2xl mx-auto text-center">
+          <h1 className="text-3xl font-bold bg-gradient-to-r from-emerald-500 to-cyan-500 bg-clip-text text-transparent mb-4">
+            Authentication Required
+          </h1>
+          <p className="text-slate-600 dark:text-slate-400 mb-6">
+            Please sign in to use Neural Multiplier. All features require authentication.
+          </p>
+          <Button 
+            onClick={() => window.location.href = '/auth/signin?redirect=/ai-tools/neural-multiplier'}
+            className="bg-emerald-600 hover:bg-emerald-700 text-white"
+          >
+            Sign In
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="container mx-auto px-4 py-8">
       <div className="max-w-6xl mx-auto">
@@ -760,7 +842,11 @@ const NeuralMultiplier = () => {
                     <Textarea
                       id="content"
                       value={content}
-                      onChange={(e) => setContent(e.target.value)}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        setContent(value);
+                        setCharacterCount(value.length);
+                      }}
                       placeholder="Paste or type your content here..."
                       className="min-h-[200px] mt-2"
                     />
@@ -771,26 +857,45 @@ const NeuralMultiplier = () => {
 
                   <div>
                     <Label>Target Platforms</Label>
-                    <Select 
-                      value={selectedPlatforms} 
-                      onValueChange={(value) => setSelectedPlatforms(value)}
-                      multiple
-                    >
-                      <SelectTrigger className="mt-2">
-                        <SelectValue placeholder="Select platforms" />
-                      </SelectTrigger>
-                      <SelectContent className="max-h-60">
-                        {platforms.map((platform) => (
-                          <SelectItem 
-                            key={platform.id} 
-                            value={platform.id}
-                            disabled={selectedPlatforms.includes(platform.id) && selectedPlatforms.length === 1}
+                    <div className="mt-2 space-y-2 max-h-60 overflow-y-auto border rounded-md p-3">
+                      {platforms.map((platform) => {
+                        const Icon = platform.icon;
+                        const isSelected = selectedPlatforms.includes(platform.id);
+                        return (
+                          <label
+                            key={platform.id}
+                            className={`flex items-center space-x-2 p-2 rounded cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors ${
+                              isSelected ? 'bg-emerald-50 dark:bg-emerald-900/20' : ''
+                            }`}
                           >
-                            {platform.name} ({platform.maxLength} chars)
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setSelectedPlatforms([...selectedPlatforms, platform.id]);
+                                } else {
+                                  if (selectedPlatforms.length > 1) {
+                                    setSelectedPlatforms(selectedPlatforms.filter(id => id !== platform.id));
+                                  } else {
+                                    toast({
+                                      title: 'At least one platform required',
+                                      description: 'Please select at least one platform',
+                                      variant: 'destructive',
+                                    });
+                                  }
+                                }
+                              }}
+                              disabled={isSelected && selectedPlatforms.length === 1}
+                              className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                            />
+                            {Icon && <Icon className="h-4 w-4 text-slate-500" />}
+                            <span className="text-sm flex-1">{platform.name}</span>
+                            <span className="text-xs text-slate-400">{platform.maxLength} chars</span>
+                          </label>
+                        );
+                      })}
+                    </div>
                     <p className="text-sm text-slate-500 mt-1">
                       {selectedPlatforms.length} platform{selectedPlatforms.length !== 1 ? 's' : ''} selected
                     </p>

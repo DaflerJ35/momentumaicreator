@@ -15,7 +15,7 @@ const SignIn = () => {
   });
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const { signIn } = useAuth();
+  const { signIn, signInWithGoogle } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const from = location.state?.from?.pathname || '/';
@@ -40,26 +40,56 @@ const SignIn = () => {
     setIsLoading(true);
     
     try {
-      await signIn(formData.email, formData.password);
+      // Sanitize email input
+      const sanitizedEmail = formData.email.trim().toLowerCase();
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(sanitizedEmail)) {
+        setError('Please enter a valid email address');
+        toast.error('Invalid email address');
+        setIsLoading(false);
+        return;
+      }
+      
+      await signIn(sanitizedEmail, formData.password);
       toast.success('Successfully signed in!');
       navigate(from, { replace: true });
     } catch (err) {
-      console.error('Sign in error:', err);
-      setError('Failed to sign in. Please check your credentials.');
-      toast.error('Failed to sign in. Please check your credentials.');
+      // Don't expose specific error details for security
+      if (err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') {
+        setError('Invalid email or password. Please try again.');
+        toast.error('Invalid email or password');
+      } else if (err.code === 'auth/too-many-requests') {
+        setError('Too many failed attempts. Please try again later.');
+        toast.error('Account temporarily locked. Please try again later.');
+      } else if (err.code === 'auth/user-disabled') {
+        setError('This account has been disabled. Please contact support.');
+        toast.error('Account disabled. Please contact support.');
+      } else {
+        setError('Failed to sign in. Please check your credentials and try again.');
+        toast.error('Sign in failed. Please try again.');
+      }
+      if (import.meta.env.DEV) {
+        console.error('Sign in error:', err);
+      }
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleGoogleSignIn = async () => {
+    setIsLoading(true);
+    setError('');
+    
     try {
-      // Implement Google sign-in logic here
-      toast.info('Google sign-in coming soon!');
+      await signInWithGoogle();
+      toast.success('Successfully signed in with Google!');
+      navigate(from, { replace: true });
     } catch (err) {
       console.error('Google sign-in error:', err);
-      setError('Failed to sign in with Google');
+      setError(err.message || 'Failed to sign in with Google');
       toast.error('Failed to sign in with Google');
+    } finally {
+      setIsLoading(false);
     }
   };
 

@@ -50,6 +50,8 @@ function initializeFirebaseAdmin() {
     logger.error('Failed to initialize Firebase Admin SDK:', error);
     // Don't throw - allow server to start even if Firebase is not configured
     // Routes that need Firebase will handle the error appropriately
+    // But log a warning so it's clear Firebase is not available
+    logger.warn('Firebase Admin SDK not available. Authentication endpoints will return 503 errors.');
   }
 }
 

@@ -39,6 +39,8 @@ const Billing = lazy(() => import('../pages/account/Billing'));
 const Pricing = lazy(() => import('../pages/pricing/Pricing'));
 const Contact = lazy(() => import('../pages/general/Contact'));
 const NotFound = lazy(() => import('../pages/NotFound'));
+const SignIn = lazy(() => import('../pages/auth/SignIn'));
+const SignUp = lazy(() => import('../pages/auth/SignUp'));
 
 // AI Tools
 const AIToolsHub = lazy(() => import('../pages/ai-tools/AIToolsHub'));
@@ -137,6 +139,20 @@ export const routes = [
     element: Contact,
     title: 'Contact',
     icon: Mail,
+    showInNav: false,
+    protected: false
+  },
+  {
+    path: '/auth/signin',
+    element: SignIn,
+    title: 'Sign In',
+    showInNav: false,
+    protected: false
+  },
+  {
+    path: '/auth/signup',
+    element: SignUp,
+    title: 'Sign Up',
     showInNav: false,
     protected: false
   },

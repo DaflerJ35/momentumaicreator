@@ -121,15 +121,29 @@ function AppContent() {
     return <LoadingSpinner />;
   }
 
-  // Separate public and protected routes
-  const publicRoutes = routes.filter(route => !route.protected);
-  const protectedRoutes = routes.filter(route => route.protected);
-
-  // Check if the current route is public
-  const isPublicRoute = publicRoutes.some(route => 
-    route.path === location.pathname || 
-    (route.path !== '/' && location.pathname.startsWith(route.path))
+  // ALL routes require authentication - no free access
+  // Only landing page (/), pricing, contact, and auth pages are accessible without auth
+  const publicRoutes = routes.filter(route => 
+    route.path === '/' || 
+    route.path === '/pricing' || 
+    route.path === '/contact' ||
+    (route.path && route.path.startsWith('/auth/'))
   );
+  const protectedRoutes = routes.filter(route => 
+    route.path !== '/' && 
+    route.path !== '/pricing' && 
+    route.path !== '/contact' &&
+    route.path !== '*' &&
+    (!route.path || !route.path.startsWith('/auth/'))
+  );
+
+  // Check if the current route is public (only landing, pricing, contact, auth pages)
+  const isPublicRoute = publicRoutes.some(route => {
+    if (route.path === location.pathname) return true;
+    if (route.path === '/') return false; // Don't match everything for root
+    if (route.path && location.pathname.startsWith(route.path)) return true;
+    return false;
+  });
 
   // App shell layout for protected routes
   const AppShell = ({ children }) => (
