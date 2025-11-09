@@ -32,6 +32,8 @@ export default function CheckoutForm({ plan, billingCycle, onSuccess, onCancel }
           plan: plan.key,
           billingCycle: billingCycle,
           customerEmail: email,
+          selectedAddOns: plan.selectedAddOns || [],
+          finalPrice: plan.finalPrice || plan.price[billingCycle],
         }),
       });
 
@@ -69,20 +71,34 @@ export default function CheckoutForm({ plan, billingCycle, onSuccess, onCancel }
           <div className="flex justify-between items-center">
             <span className="font-medium">Total due today</span>
             <span className="text-lg font-bold">
-              {plan.price[billingCycle] === 0 ? 'Free' : `$${plan.price[billingCycle]}`}
-              {plan.price[billingCycle] > 0 && (
+              {plan.finalPrice 
+                ? `$${plan.finalPrice}` 
+                : plan.price[billingCycle] === 0 
+                ? 'Free' 
+                : `$${plan.price[billingCycle]}`}
+              {((plan.finalPrice || plan.price[billingCycle]) > 0) && (
                 <span className="text-sm font-normal text-gray-500 ml-1">
                   {billingCycle === '6months' ? ' every 6 months' : billingCycle === '12months' ? ' per year' : '/month'}
                 </span>
               )}
             </span>
           </div>
-          {billingCycle !== 'monthly' && plan.price.monthly > 0 && (
+          {plan.selectedAddOns && plan.selectedAddOns.length > 0 && (
+            <div className="mt-2 pt-2 border-t border-gray-200">
+              <p className="text-sm font-medium text-gray-700 mb-1">Selected Add-ons:</p>
+              <ul className="text-sm text-gray-600 space-y-1">
+                {plan.selectedAddOns.map((addOn, idx) => (
+                  <li key={idx}>• {addOn.name} (+${addOn.price}/mo)</li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {billingCycle !== 'monthly' && (plan.finalPrice || plan.price.monthly) > 0 && (
             <div className="mt-1 text-sm text-gray-500">
               {billingCycle === '6months' ? (
-                <span>Save 10% (${(plan.price.monthly * 6 * 0.1).toFixed(2)}) compared to monthly billing</span>
+                <span>Save 10% compared to monthly billing</span>
               ) : (
-                <span>Save 20% (${(plan.price.monthly * 12 * 0.2).toFixed(2)}) compared to monthly billing</span>
+                <span>Save 20% compared to monthly billing</span>
               )}
             </div>
           )}

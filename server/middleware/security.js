@@ -31,11 +31,32 @@ const securityHeaders = (req, res, next) => {
   const isProduction = process.env.NODE_ENV === 'production';
   const isDevelopment = process.env.NODE_ENV === 'development';
 
+  // Get backend API origin(s) from environment
+  // In production, this should be the same origin or the API server URL
+  // In development, allow localhost:3001 for the backend server
+  const backendOrigins = [];
+  if (process.env.VITE_API_URL) {
+    // Parse VITE_API_URL and add to allowed origins
+    try {
+      const apiUrl = new URL(process.env.VITE_API_URL);
+      backendOrigins.push(apiUrl.origin);
+    } catch (e) {
+      // If VITE_API_URL is not a full URL, assume same origin
+    }
+  }
+  // In development, always allow localhost:3001 for backend server
+  if (isDevelopment) {
+    backendOrigins.push('http://localhost:3001');
+  }
+  // If FRONTEND_URL is set and different, we might need to add API server explicitly
+  // For same-origin deployments, 'self' will cover it
+
   // Content Security Policy
   const cspDirectives = {
     defaultSrc: ["'self'"], // Default policy for loading content
     scriptSrc: [
       "'self'",
+      // Stripe.js library
       'https://js.stripe.com',
       'https://cdn.jsdelivr.net',
       'https://cdnjs.cloudflare.com',
@@ -50,9 +71,13 @@ const securityHeaders = (req, res, next) => {
     imgSrc: ["'self'", 'data:', 'https:', 'blob:'],
     connectSrc: [
       "'self'",
-      // Stripe endpoints
+      // Backend API origin(s) - required for API calls
+      ...backendOrigins,
+      // Stripe endpoints - API calls, checkout, billing portal
       'https://api.stripe.com',
       'https://js.stripe.com',
+      'https://checkout.stripe.com', // Checkout redirects
+      'https://billing.stripe.com', // Billing portal
       // Firebase endpoints - Auth, Realtime Database, Firestore, Storage
       'https://*.firebaseio.com',
       'https://*.firebase.com',
@@ -66,9 +91,16 @@ const securityHeaders = (req, res, next) => {
       // Google Gemini AI endpoints
       'https://generativelanguage.googleapis.com',
       'https://ai.google.dev',
-      ...(isDevelopment ? ['ws://localhost:*', 'http://localhost:*'] : []), // For development
+      ...(isDevelopment ? ['ws://localhost:*', 'http://localhost:*'] : []), // For development, including SSE
     ],
-    frameSrc: ["'self'", 'https://js.stripe.com', 'https://hooks.stripe.com'],
+    frameSrc: [
+      "'self'",
+      // Stripe iframes - checkout, billing portal, webhooks
+      'https://js.stripe.com',
+      'https://hooks.stripe.com',
+      'https://checkout.stripe.com', // Checkout iframe
+      'https://billing.stripe.com', // Billing portal iframe
+    ],
     objectSrc: ["'none'"],
     baseUri: ["'self'"],
     formAction: ["'self'"],

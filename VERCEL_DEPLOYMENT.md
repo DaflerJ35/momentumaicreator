@@ -28,8 +28,10 @@
    VITE_FIREBASE_MEASUREMENT_ID=your_measurement_id
    VITE_GEMINI_API_KEY=your_gemini_api_key
    VITE_STRIPE_PUBLISHABLE_KEY=your_stripe_publishable_key_here
-   VITE_APP_URL=https://your-app.vercel.app
+   VITE_APP_URL=https://www.momentumaicreator.com
    ```
+   
+   **Note:** Use your custom domain `www.momentumaicreator.com` instead of the Vercel URL
 
    ### Backend/Server Variables
    ```
@@ -45,8 +47,14 @@
    STRIPE_YEARLY_PRO_PRICE_ID=price_xxxxxxxxxxxxxxxxxxxxxxxx
    STRIPE_YEARLY_BUSINESS_PRICE_ID=price_xxxxxxxxxxxxxxxxxxxxxxxx
    STRIPE_YEARLY_BUSINESS_PLUS_PRICE_ID=price_xxxxxxxxxxxxxxxxxxxxxxxx
-   FRONTEND_URL=https://your-app.vercel.app
+   FRONTEND_URL=https://www.momentumaicreator.com
+   API_URL=https://www.momentumaicreator.com
    ```
+   
+   **⚠️ Important:** 
+   - Use your custom domain `www.momentumaicreator.com` for `FRONTEND_URL` and `API_URL`
+   - `FRONTEND_URL` is used for CORS and Stripe redirects
+   - `API_URL` is used for OAuth redirect URIs (Instagram, Twitter, YouTube, etc.)
 
 4. **API Routes Setup**
    - Vercel will automatically detect the `server/` directory
@@ -55,27 +63,34 @@
 
 5. **Stripe Webhook Configuration**
    - In Stripe Dashboard → Webhooks
-   - Add endpoint: `https://your-app.vercel.app/api/webhook`
+   - Add endpoint: `https://www.momentumaicreator.com/api/webhook`
    - Select events: `checkout.session.completed`, `customer.subscription.updated`
    - Copy webhook secret to `STRIPE_WEBHOOK_SECRET`
+   
+   **Note:** Use your custom domain `www.momentumaicreator.com` for the webhook URL
 
 ## Important Notes
 
 - ✅ The `vercel.json` is already configured
 - ✅ CSP headers are set for security
 - ✅ API routes are configured for serverless functions
-- ⚠️ Make sure all environment variables are set before deploying
+- ⚠️ Make sure all environment variables are set before deploying (see VERCEL_ENV_VARIABLES.md)
 - ⚠️ Update `FRONTEND_URL` after first deployment
+- ⚠️ If using a custom domain or separate API server, update CSP `connect-src` in `vercel.json`
+- ⚠️ If using server AI (`VITE_USE_SERVER_AI=true`), set `VITE_API_URL` to your Vercel domain
 
 ## Post-Deployment Checklist
 
-- [ ] Test authentication (Firebase)
-- [ ] Test AI content generation (Gemini API)
+- [ ] All environment variables set in Vercel (see VERCEL_ENV_VARIABLES.md)
+- [ ] Test authentication (Firebase) - verify auth modal opens with `?showAuth=1` query param
+- [ ] Test AI content generation (Gemini API or server AI)
 - [ ] Test Stripe checkout flow
 - [ ] Verify webhook is working
 - [ ] Test all AI tools
 - [ ] Check mobile responsiveness
 - [ ] Verify analytics tracking
+- [ ] Test all `/api/*` endpoints
+- [ ] Verify CSP headers allow your production API domains (check browser console for CSP errors)
 
 ## Troubleshooting
 

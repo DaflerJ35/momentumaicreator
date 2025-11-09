@@ -15,6 +15,7 @@ const initialState = {
     temperature: 0.7,
     maxTokens: 2048,
   },
+  aiConfigError: null, // AI provider configuration error
 };
 
 // Action types
@@ -26,6 +27,8 @@ const AI_ACTIONS = {
   SET_ACTIVE_TOOL: 'SET_ACTIVE_TOOL',
   UPDATE_MODEL_SETTINGS: 'UPDATE_MODEL_SETTINGS',
   CLEAR_HISTORY: 'CLEAR_HISTORY',
+  SET_AI_CONFIG_ERROR: 'SET_AI_CONFIG_ERROR',
+  CLEAR_AI_CONFIG_ERROR: 'CLEAR_AI_CONFIG_ERROR',
 };
 
 // Reducer function
@@ -92,6 +95,18 @@ function aiReducer(state, action) {
       return {
         ...state,
         history: [],
+      };
+      
+    case AI_ACTIONS.SET_AI_CONFIG_ERROR:
+      return {
+        ...state,
+        aiConfigError: action.payload.error,
+      };
+      
+    case AI_ACTIONS.CLEAR_AI_CONFIG_ERROR:
+      return {
+        ...state,
+        aiConfigError: null,
       };
       
     default:
@@ -251,6 +266,19 @@ export const AIProvider = ({ children }) => {
     toast.success('Generation history cleared');
   }, []);
   
+  // Set AI configuration error
+  const setAiConfigError = useCallback((error) => {
+    dispatch({
+      type: AI_ACTIONS.SET_AI_CONFIG_ERROR,
+      payload: { error },
+    });
+  }, []);
+  
+  // Clear AI configuration error
+  const clearAiConfigError = useCallback(() => {
+    dispatch({ type: AI_ACTIONS.CLEAR_AI_CONFIG_ERROR });
+  }, []);
+  
   // Context value
   const value = {
     // State
@@ -263,6 +291,8 @@ export const AIProvider = ({ children }) => {
     setActiveTool,
     updateModelSettings,
     clearHistory,
+    setAiConfigError,
+    clearAiConfigError,
   };
   
   return (

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Check, Zap, Sparkles, Rocket, Users, Shield, ZapOff, Clock, BarChart2, Mail, LifeBuoy, CreditCard, Loader2 } from 'lucide-react';
+import { Check, Zap, Sparkles, Rocket, Users, Shield, ZapOff, Clock, BarChart2, Mail, LifeBuoy, CreditCard, Loader2, Plus, X } from 'lucide-react';
 import { Button } from '../../components/ui/button';
 import { Tabs, TabsList, TabsTrigger } from '../../components/ui/tabs';
 import { useAuth } from '../../contexts/AuthContext';
@@ -92,30 +92,57 @@ const PLANS = {
     name: 'Business+',
     description: 'Custom solutions for enterprise needs.',
     icon: <Rocket className="h-6 w-6 text-emerald-400" />,
-    features: [
+    baseFeatures: [
       'Everything in Business',
       'Unlimited AI Image Generation',
       'Unlimited AI Video Generation',
       'Unlimited AI Voice Over',
       'Priority Marketplace Listing',
       'Advanced Referral Rewards',
-      'Dedicated Onboarding & Training',
-      'API Access & Integrations',
-      'Advanced Security & SSO',
-      'Custom Model Training',
-      'White-labeling & Custom Branding',
       '24/7 Priority Support'
     ],
+    addOns: [
+      {
+        id: 'onboarding',
+        name: 'Dedicated Onboarding & Training',
+        price: 150,
+        description: 'Personalized onboarding and team training sessions'
+      },
+      {
+        id: 'api',
+        name: 'API Access & Integrations',
+        price: 200,
+        description: 'Full API access with custom integrations'
+      },
+      {
+        id: 'security',
+        name: 'Advanced Security & SSO',
+        price: 150,
+        description: 'Enterprise-grade security with SSO support'
+      },
+      {
+        id: 'training',
+        name: 'Custom Model Training',
+        price: 200,
+        description: 'Train custom AI models for your brand'
+      },
+      {
+        id: 'whitelabel',
+        name: 'White-labeling & Custom Branding',
+        price: 119,
+        description: 'Fully branded experience with your logo and colors'
+      }
+    ],
     price: {
-      monthly: 249,
-      '6months': 224,
-      '12months': 199
+      monthly: 250,
+      '6months': 225,
+      '12months': 200
     },
-    cta: 'Contact Sales',
+    cta: 'Choose Business+ Plan',
     popular: false,
     current: false,
-    buttonVariant: 'outline',
-    custom: true
+    buttonVariant: 'default',
+    custom: false
   }
 };
 
@@ -124,12 +151,14 @@ const Pricing = () => {
   const [selectedPlan, setSelectedPlan] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [businessPlusAddOns, setBusinessPlusAddOns] = useState({});
+  const [showBusinessPlusModal, setShowBusinessPlusModal] = useState(false);
   const { currentUser } = useAuth();
   const navigate = useNavigate();
 
   const handleUpgrade = async (planKey) => {
     if (planKey === 'businessPlus') {
-      navigate('/contact');
+      setShowBusinessPlusModal(true);
       return;
     }
 
@@ -155,6 +184,48 @@ const Pricing = () => {
       // For paid plans, open the upgrade modal
       setIsModalOpen(true);
     }
+  };
+
+  const calculateBusinessPlusPrice = () => {
+    const basePrice = PLANS.businessPlus.price[billingCycle];
+    const selectedAddOns = Object.entries(businessPlusAddOns)
+      .filter(([_, selected]) => selected)
+      .map(([id, _]) => {
+        const addOn = PLANS.businessPlus.addOns.find(a => a.id === id);
+        return addOn ? addOn.price : 0;
+      });
+    const addOnsTotal = selectedAddOns.reduce((sum, price) => sum + price, 0);
+    return basePrice + addOnsTotal;
+  };
+
+  const handleBusinessPlusAddOnToggle = (addOnId) => {
+    setBusinessPlusAddOns(prev => ({
+      ...prev,
+      [addOnId]: !prev[addOnId]
+    }));
+  };
+
+  const handleBusinessPlusCheckout = () => {
+    const selectedAddOnsList = Object.entries(businessPlusAddOns)
+      .filter(([_, selected]) => selected)
+      .map(([id, _]) => {
+        const addOn = PLANS.businessPlus.addOns.find(a => a.id === id);
+        return addOn;
+      })
+      .filter(Boolean);
+
+    const finalPrice = calculateBusinessPlusPrice();
+    
+    setSelectedPlan({
+      ...PLANS.businessPlus,
+      key: 'businessPlus',
+      selectedAddOns: selectedAddOnsList,
+      finalPrice: finalPrice,
+      billingCycle: billingCycle
+    });
+    
+    setShowBusinessPlusModal(false);
+    setIsModalOpen(true);
   };
 
   const handleUpgradeSuccess = () => {
@@ -263,24 +334,39 @@ const Pricing = () => {
                 <div className="my-6">
                   <div className="flex items-baseline">
                     <span className="text-4xl font-bold text-white">
-                      {key === 'free' ? 'Free' : formatPrice(plan.price[billingCycle])}
+                      {key === 'free' 
+                        ? 'Free' 
+                        : key === 'businessPlus'
+                        ? formatPrice(PLANS.businessPlus.price[billingCycle])
+                        : formatPrice(plan.price[billingCycle])
+                      }
                     </span>
                     {key !== 'free' && (
                       <span className="ml-2 text-slate-400">/mo</span>
                     )}
                   </div>
-                  {key !== 'free' && (
+                  {key === 'businessPlus' && (
+                    <p className="text-xs text-slate-400 mt-1">
+                      Base price + add-ons (up to {formatPrice(1069)}/mo)
+                    </p>
+                  )}
+                  {key !== 'free' && key !== 'businessPlus' && (
                     <p className="text-sm text-slate-400 mt-1">{getBillingText()}</p>
                   )}
                 </div>
 
                 <ul className="space-y-3 mb-6">
-                  {plan.features.map((feature, index) => (
+                  {(plan.baseFeatures || plan.features || []).map((feature, index) => (
                     <li key={index} className="flex items-start">
                       <Check className="h-5 w-5 text-emerald-500 flex-shrink-0 mt-0.5 mr-2" />
                       <span className="text-slate-300">{feature}</span>
                     </li>
                   ))}
+                  {key === 'businessPlus' && plan.addOns && (
+                    <li className="text-xs text-slate-400 mt-2">
+                      + {plan.addOns.length} optional add-ons available
+                    </li>
+                  )}
                 </ul>
 
                 <Button
@@ -289,6 +375,8 @@ const Pricing = () => {
                       ? 'bg-gradient-to-r from-emerald-500 to-cyan-500 hover:from-emerald-600 hover:to-cyan-600' 
                       : plan.current 
                         ? 'bg-slate-800 text-white hover:bg-slate-700' 
+                        : key === 'businessPlus'
+                        ? 'bg-gradient-to-r from-emerald-500 to-cyan-500 hover:from-emerald-600 hover:to-cyan-600'
                         : 'bg-slate-800 hover:bg-slate-700'
                   }`}
                   size="lg"
@@ -367,6 +455,116 @@ const Pricing = () => {
         </div>
       </div>
 
+      {/* Business Plus Add-Ons Modal */}
+      <AnimatePresence>
+        {showBusinessPlusModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
+            onClick={() => setShowBusinessPlusModal(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-slate-900 rounded-xl border border-slate-700 max-w-2xl w-full max-h-[90vh] overflow-y-auto"
+            >
+              <div className="sticky top-0 bg-slate-900 border-b border-slate-700 p-6 flex items-center justify-between z-10">
+                <div>
+                  <h2 className="text-2xl font-bold text-white">Customize Business+ Plan</h2>
+                  <p className="text-slate-400 text-sm mt-1">Select add-ons to customize your plan</p>
+                </div>
+                <button
+                  onClick={() => setShowBusinessPlusModal(false)}
+                  className="p-2 hover:bg-slate-800 rounded-lg transition-colors"
+                >
+                  <X className="h-5 w-5 text-slate-400" />
+                </button>
+              </div>
+
+              <div className="p-6">
+                <div className="mb-6 p-4 bg-slate-800/50 rounded-lg border border-slate-700">
+                  <div className="flex items-baseline justify-between">
+                    <div>
+                      <p className="text-sm text-slate-400">Base Plan</p>
+                      <p className="text-2xl font-bold text-white">
+                        {formatPrice(PLANS.businessPlus.price[billingCycle])}
+                        <span className="text-sm text-slate-400 font-normal">/mo</span>
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm text-slate-400">Total with Add-ons</p>
+                      <p className="text-2xl font-bold text-emerald-400">
+                        {formatPrice(calculateBusinessPlusPrice())}
+                        <span className="text-sm text-slate-400 font-normal">/mo</span>
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <h3 className="text-lg font-semibold text-white mb-4">Available Add-ons</h3>
+                  {PLANS.businessPlus.addOns.map((addOn) => (
+                    <motion.div
+                      key={addOn.id}
+                      whileHover={{ scale: 1.02 }}
+                      className={`p-4 rounded-lg border-2 transition-all cursor-pointer ${
+                        businessPlusAddOns[addOn.id]
+                          ? 'border-emerald-500 bg-emerald-500/10'
+                          : 'border-slate-700 bg-slate-800/50 hover:border-slate-600'
+                      }`}
+                      onClick={() => handleBusinessPlusAddOnToggle(addOn.id)}
+                    >
+                      <div className="flex items-start justify-between">
+                        <div className="flex items-start space-x-3 flex-1">
+                          <div className={`mt-1 w-5 h-5 rounded border-2 flex items-center justify-center transition-all ${
+                            businessPlusAddOns[addOn.id]
+                              ? 'border-emerald-500 bg-emerald-500'
+                              : 'border-slate-600 bg-transparent'
+                          }`}>
+                            {businessPlusAddOns[addOn.id] && (
+                              <Check className="h-3 w-3 text-white" />
+                            )}
+                          </div>
+                          <div className="flex-1">
+                            <div className="flex items-center justify-between">
+                              <h4 className="font-semibold text-white">{addOn.name}</h4>
+                              <span className="text-lg font-bold text-emerald-400 ml-4">
+                                +{formatPrice(addOn.price)}/mo
+                              </span>
+                            </div>
+                            <p className="text-sm text-slate-400 mt-1">{addOn.description}</p>
+                          </div>
+                        </div>
+                      </div>
+                    </motion.div>
+                  ))}
+                </div>
+
+                <div className="mt-6 flex gap-4">
+                  <Button
+                    variant="outline"
+                    className="flex-1 border-slate-600 text-white hover:bg-slate-800"
+                    onClick={() => setShowBusinessPlusModal(false)}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    className="flex-1 bg-gradient-to-r from-emerald-500 to-cyan-500 hover:from-emerald-600 hover:to-cyan-600"
+                    onClick={handleBusinessPlusCheckout}
+                  >
+                    Proceed to Checkout
+                  </Button>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Plan Upgrade Modal */}
       {selectedPlan && (
         <PlanUpgradeModal
@@ -374,9 +572,10 @@ const Pricing = () => {
           onClose={() => {
             setIsModalOpen(false);
             setSelectedPlan(null);
+            setBusinessPlusAddOns({});
           }}
           plan={selectedPlan}
-          billingCycle={billingCycle}
+          billingCycle={selectedPlan.billingCycle || billingCycle}
           onSuccess={handleUpgradeSuccess}
         />
       )}

@@ -330,6 +330,7 @@ const Contact = () => {
                     errors.subject ? 'border-red-500' : 'border-slate-700'
                   } rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent`}
                 >
+                  {/* Subject values must match server allowlist: ['general', 'sales', 'enterprise', 'support', 'partnership', 'other'] */}
                   <option value="general">General Inquiry</option>
                   <option value="sales">Sales & Pricing</option>
                   <option value="enterprise">Enterprise Solutions</option>

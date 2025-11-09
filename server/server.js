@@ -106,7 +106,18 @@ const contactLimiter = createRateLimiter(
   'Too many contact form submissions. Please try again later.'
 );
 
-// IMPORTANT: Webhook handler must be before body parsers to access raw body for signature verification
+/**
+ * IMPORTANT: Webhook handler must be mounted BEFORE any body parsers (express.json, express.urlencoded)
+ * to access the raw request body for Stripe signature verification.
+ * 
+ * Stripe webhook signature verification requires the raw body buffer, which is lost after
+ * body parsing middleware processes the request. This route must remain above all body
+ * parsing middleware to ensure signature verification works correctly.
+ * 
+ * DO NOT MOVE THIS ROUTE BELOW express.json() or express.urlencoded() middleware.
+ * Doing so will break webhook signature verification and expose the application to
+ * unauthorized webhook events.
+ */
 app.post('/api/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
   if (!stripe) {
     logger.error('Stripe not initialized. Cannot process webhook.');
@@ -221,9 +232,63 @@ app.post('/api/create-checkout-session', async (req, res) => {
     return res.status(503).json({ error: 'Payment service unavailable. Please contact support.' });
   }
 
-  const { plan, billingCycle, customerEmail } = req.body;
+  const { plan, billingCycle, customerEmail, selectedAddOns = [], finalPrice } = req.body;
   
   try {
+    // Handle Business Plus with custom add-ons
+    if (plan === 'businessPlus' && finalPrice) {
+      // For Business Plus, calculate the base price and add-on prices
+      const addOnsTotal = selectedAddOns.reduce((sum, addOn) => sum + (addOn.price || 0), 0);
+      const basePrice = finalPrice - addOnsTotal;
+      
+      // Determine billing interval
+      let interval = 'month';
+      let intervalCount = 1;
+      if (billingCycle === '6months') {
+        intervalCount = 6;
+      } else if (billingCycle === '12months') {
+        interval = 'year';
+        intervalCount = 1;
+      }
+      
+      // Create a custom price for the total amount (base + add-ons)
+      const lineItems = [{
+        price_data: {
+          currency: 'usd',
+          product: PRODUCT_IDS[plan] || PRODUCT_IDS.businessPlus || '',
+          recurring: {
+            interval: interval,
+            interval_count: intervalCount,
+          },
+          unit_amount: Math.round(finalPrice * 100), // Convert to cents
+        },
+        quantity: 1,
+      }];
+      
+      const session = await stripe.checkout.sessions.create({
+        payment_method_types: ['card'],
+        line_items: lineItems,
+        mode: 'subscription',
+        automatic_tax: { enabled: true },
+        success_url: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/dashboard?payment=success&session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/pricing?payment=cancelled`,
+        customer_email: customerEmail,
+        metadata: {
+          plan,
+          billing_cycle: billingCycle,
+          product_id: PRODUCT_IDS[plan] || '',
+          add_ons: JSON.stringify(selectedAddOns),
+          base_price: basePrice.toString(),
+          add_ons_total: addOnsTotal.toString(),
+          final_price: finalPrice.toString()
+        }
+      });
+
+      res.json({ sessionId: session.id });
+      return;
+    }
+    
+    // Standard plan handling
     const priceId = PRICE_IDS[billingCycle]?.[plan];
     
     // Handle missing yearly Pro plan gracefully
@@ -397,6 +462,37 @@ app.post('/api/ai/stream', async (req, res) => {
     // Create AbortController for upstream cancellation
     const abortController = new AbortController();
 
+    // Heartbeat interval - send comment line every 20 seconds to keep connection alive
+    // Clients should handle these comment lines (they start with ':')
+    const HEARTBEAT_INTERVAL = 20000; // 20 seconds
+    const heartbeatInterval = setInterval(() => {
+      if (clientClosed) {
+        clearInterval(heartbeatInterval);
+        return;
+      }
+      // Send SSE comment line (keeps connection alive, ignored by EventSource)
+      res.write(': heartbeat\n\n');
+    }, HEARTBEAT_INTERVAL);
+
+    // Maximum stream duration - abort after 5 minutes to prevent indefinite connections
+    const MAX_STREAM_DURATION = 300000; // 5 minutes
+    const maxDurationTimeout = setTimeout(() => {
+      if (!clientClosed) {
+        logger.warn('AI stream exceeded maximum duration, aborting', { duration: MAX_STREAM_DURATION });
+        abortController.abort();
+        clientClosed = true;
+        clearInterval(heartbeatInterval);
+        res.write(`data: ${JSON.stringify({ error: 'Stream timeout: maximum duration exceeded', done: true })}\n\n`);
+        res.end();
+      }
+    }, MAX_STREAM_DURATION);
+
+    // Cleanup function to clear all timers
+    const cleanup = () => {
+      clearInterval(heartbeatInterval);
+      clearTimeout(maxDurationTimeout);
+    };
+
     try {
       for await (const chunk of aiService.generateStreamingContent(prompt, {
         model,
@@ -409,6 +505,7 @@ app.post('/api/ai/stream', async (req, res) => {
         // Check if client disconnected before writing
         if (clientClosed) {
           abortController.abort();
+          cleanup();
           return;
         }
         res.write(`data: ${JSON.stringify({ chunk, done: false })}\n\n`);
@@ -416,16 +513,23 @@ app.post('/api/ai/stream', async (req, res) => {
       
       // Check again before sending final message
       if (clientClosed) {
+        cleanup();
         return;
       }
       
+      // Clear timers on successful completion
+      cleanup();
       res.write(`data: ${JSON.stringify({ chunk: '', done: true })}\n\n`);
       res.end();
     } catch (error) {
+      // Clear timers on error
+      cleanup();
+      
       // Don't write error if client already disconnected
       if (clientClosed) {
         return;
       }
+      
       // Don't expose technical error details in SSE stream
       res.write(`data: ${JSON.stringify({ error: 'Failed to stream content', done: true })}\n\n`);
       res.end();

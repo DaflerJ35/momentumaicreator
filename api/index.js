@@ -17,6 +17,6 @@ try {
 const app = require('../server/server.js');
 
 // Export as Vercel serverless function
-// Vercel will automatically handle Express apps when exported directly
+// Vercel automatically handles Express apps when exported directly
 module.exports = app;
 

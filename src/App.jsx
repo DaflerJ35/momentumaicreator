@@ -12,9 +12,12 @@ import ParticleBackground from './components/animations/ParticleBackground';
 import CommandPalette from './components/CommandPalette';
 import ErrorBoundary from './components/ErrorBoundary';
 import ActiveUsersIndicator from './components/ActiveUsersIndicator';
+import CursorTrackingWrapper from './components/CursorTrackingWrapper';
 import NotFound from './pages/NotFound';
 import { Toaster } from 'sonner';
 import { LoadingSpinner } from './components/ui/LoadingSpinner';
+import AIConfigBanner from './components/AIConfigBanner';
+import { useAI } from './contexts/AIContext';
 
 // Page transition variants
 const pageVariants = {
@@ -47,19 +50,52 @@ function AppContent() {
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const location = useLocation();
+  const { aiConfigError } = useAI();
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      setUser(currentUser);
+    let unsubscribe;
+    
+    // Check if auth is a mock object (when Firebase env vars are missing)
+    if (auth && auth._isMock) {
+      // This is our mock auth object - use its method directly
+      unsubscribe = auth.onAuthStateChanged((currentUser) => {
+        setUser(currentUser);
+        setLoading(false);
+      });
+    } else if (auth) {
+      // Real Firebase auth object - use Firebase's onAuthStateChanged
+      unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+        setUser(currentUser);
+        setLoading(false);
+      });
+    } else {
+      // No auth available at all
+      setUser(null);
       setLoading(false);
-    });
+      unsubscribe = () => {};
+    }
 
-    return () => unsubscribe();
+    return () => {
+      if (unsubscribe) unsubscribe();
+    };
   }, []);
 
-  // Check if auth modal should be shown based on location state
+  // Check if auth modal should be shown based on location state or query param
   useEffect(() => {
-    if (location.state?.showAuth) {
+    // Check for query parameter ?showAuth=1 (for cross-origin redirects)
+    const searchParams = new URLSearchParams(location.search);
+    if (searchParams.get('showAuth') === '1') {
+      setShowAuthModal(true);
+      // Clear the query param from URL to avoid re-opening on refresh
+      const newSearch = new URLSearchParams(location.search);
+      newSearch.delete('showAuth');
+      const newSearchString = newSearch.toString();
+      const newUrl = newSearchString 
+        ? `${location.pathname}?${newSearchString}`
+        : location.pathname;
+      window.history.replaceState({}, '', newUrl);
+    } else if (location.state?.showAuth) {
+      // Also check for location state (for internal navigation)
       setShowAuthModal(true);
     }
   }, [location]);
@@ -113,24 +149,26 @@ function AppContent() {
           onMenuToggle={() => setSidebarOpen(!sidebarOpen)}
         />
         <main className="flex-1 overflow-y-auto p-6 relative">
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={location.pathname}
-              initial="initial"
-              animate="in"
-              exit="out"
-              variants={pageVariants}
-              transition={pageTransition}
-            >
-              <Suspense fallback={
-                <div className="flex items-center justify-center min-h-[60vh]">
-                  <LoadingSpinner size="xl" />
-                </div>
-              }>
-                {children}
-              </Suspense>
-            </motion.div>
-          </AnimatePresence>
+          <CursorTrackingWrapper enableTracking={true}>
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={location.pathname}
+                initial="initial"
+                animate="in"
+                exit="out"
+                variants={pageVariants}
+                transition={pageTransition}
+              >
+                <Suspense fallback={
+                  <div className="flex items-center justify-center min-h-[60vh]">
+                    <LoadingSpinner size="xl" />
+                  </div>
+                }>
+                  {children}
+                </Suspense>
+              </motion.div>
+            </AnimatePresence>
+          </CursorTrackingWrapper>
         </main>
       </div>
     </div>
@@ -139,6 +177,9 @@ function AppContent() {
   return (
     <ErrorBoundary>
       <div className="app-container relative">
+        {/* AI Configuration Banner */}
+        <AIConfigBanner error={aiConfigError} />
+        
         {!isPublicRoute && (
           <>
             <AnimatedBackground />
@@ -223,8 +264,13 @@ function AppContent() {
 }
 
 function ProtectedRoute({ children, user }) {
-  // Always render children - let individual pages handle auth requirements
-  // This prevents redirect loops and allows pages to show content with auth prompts
+  // Check if user is authenticated
+  if (!user) {
+    // Return Navigate element instead of calling navigate() to avoid side-effects during render
+    return <Navigate to="/" replace state={{ showAuth: true }} />;
+  }
+
+  // Render children only when user is authenticated
   return children;
 }
 

@@ -5,6 +5,7 @@ import { Moon, Sun, Bell, User, Menu, X, Sparkles } from 'lucide-react';
 import { FloatingElement, PulsingElement } from './animations/FloatingElements';
 import { ShimmerText } from './animations/ShimmerEffect';
 import ThemeSwitcher from './ThemeSwitcher';
+import NotificationCenter from './NotificationCenter';
 
 function Navbar({ user, onAuthClick, onMenuToggle }) {
   const [darkMode, setDarkMode] = useState(() => {
@@ -60,10 +61,23 @@ function Navbar({ user, onAuthClick, onMenuToggle }) {
                     repeat: Infinity,
                     ease: 'linear',
                   }}
-                  className="absolute inset-0 bg-gradient-to-r from-[hsl(200,100%,50%)] to-[hsl(280,85%,60%)] rounded-lg blur-xl opacity-50"
+                  className="absolute inset-0 bg-gradient-to-r from-cyan-400 to-pink-500 rounded-lg blur-xl opacity-50"
                 />
-                <div className="relative bg-gradient-to-r from-[hsl(200,100%,50%)] to-[hsl(280,85%,60%)] p-2 rounded-lg">
-                  <Sparkles className="h-5 w-5 text-white" />
+                <div className="relative w-10 h-10 flex items-center justify-center">
+                  <img 
+                    src="/momentum-logo.png" 
+                    alt="Momentum AI" 
+                    className="h-10 w-10 object-contain"
+                    onError={(e) => {
+                      // Fallback to gradient icon if logo not found
+                      e.target.style.display = 'none';
+                      const fallback = e.target.parentElement.querySelector('.logo-fallback');
+                      if (fallback) fallback.style.display = 'flex';
+                    }}
+                  />
+                  <div className="logo-fallback hidden bg-gradient-to-r from-cyan-400 to-pink-500 p-2 rounded-lg absolute inset-0 items-center justify-center">
+                    <Sparkles className="h-5 w-5 text-white" />
+                  </div>
                 </div>
               </div>
               <ShimmerText className="text-2xl font-bold">Momentum AI</ShimmerText>
@@ -109,24 +123,7 @@ function Navbar({ user, onAuthClick, onMenuToggle }) {
           </motion.button>
 
           {/* Notifications */}
-          <motion.button
-            whileHover={{ scale: 1.1 }}
-            whileTap={{ scale: 0.9 }}
-            className="p-2 rounded-lg hover:bg-slate-800/50 transition-colors relative"
-            aria-label="Notifications"
-          >
-            <Bell className="w-5 h-5 text-slate-400 hover:text-[hsl(200,100%,50%)] transition-colors" />
-            <PulsingElement>
-              <motion.span 
-                className="absolute top-1 right-1 w-2 h-2 bg-[hsl(200,100%,50%)] rounded-full"
-                animate={{
-                  scale: [1, 1.5, 1],
-                  opacity: [1, 0.5, 1],
-                }}
-                transition={{ duration: 2, repeat: Infinity }}
-              />
-            </PulsingElement>
-          </motion.button>
+          <NotificationCenter />
 
           {/* User menu */}
           {user ? (

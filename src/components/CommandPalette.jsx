@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { routes } from '../config/routes';
 import { useAuth } from '../contexts/AuthContext';
+import { useGlobalSearch } from '../contexts/GlobalSearchContext';
 
 const CommandPalette = () => {
   const [isOpen, setIsOpen] = useState(false);
@@ -23,8 +24,9 @@ const CommandPalette = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { currentUser } = useAuth();
+  const { search: globalSearch, navigateToResult } = useGlobalSearch();
 
-  // Build searchable items
+  // Build searchable items (fallback to routes if GlobalSearch not available)
   const items = useMemo(() => {
     if (!routes || !Array.isArray(routes)) {
       return [];
@@ -36,8 +38,10 @@ const CommandPalette = () => {
         id: route.path,
         title: route.title,
         subtitle: route.path,
+        description: route.category ? `Navigate to ${route.title}` : '',
         icon: route.icon || Home,
         category: 'Navigation',
+        path: route.path,
         action: () => {
           navigate(route.path);
           setIsOpen(false);
@@ -49,8 +53,10 @@ const CommandPalette = () => {
         id: 'dashboard',
         title: 'Go to Dashboard',
         subtitle: '/dashboard',
+        description: 'Navigate to the main dashboard',
         icon: Home,
         category: 'Actions',
+        path: '/dashboard',
         action: () => {
           navigate('/dashboard');
           setIsOpen(false);
@@ -60,21 +66,12 @@ const CommandPalette = () => {
         id: 'settings',
         title: 'Open Settings',
         subtitle: '/settings',
+        description: 'Configure your account settings',
         icon: Settings,
         category: 'Actions',
+        path: '/settings',
         action: () => {
           navigate('/settings');
-          setIsOpen(false);
-        },
-      },
-      {
-        id: 'profile',
-        title: 'View Profile',
-        subtitle: '/profile',
-        icon: User,
-        category: 'Actions',
-        action: () => {
-          navigate('/profile');
           setIsOpen(false);
         },
       },
@@ -83,17 +80,41 @@ const CommandPalette = () => {
     return [...navItems, ...actions];
   }, [navigate]);
 
-  // Filter items based on search query
+  // Use global search if available, otherwise use local filtering
   const filteredItems = useMemo(() => {
-    if (!searchQuery.trim()) return items;
+    if (!searchQuery.trim()) {
+      // Show recent/featured items when no query
+      return items.slice(0, 10);
+    }
 
+    // Try global search first
+    if (globalSearch && typeof globalSearch === 'function') {
+      const globalResults = globalSearch(searchQuery);
+      if (globalResults.length > 0) {
+        return globalResults.map(item => ({
+          ...item,
+          subtitle: item.path || item.subtitle,
+          action: () => {
+            if (navigateToResult && typeof navigateToResult === 'function') {
+              navigateToResult(item);
+            } else if (item.path) {
+              navigate(item.path);
+            }
+            setIsOpen(false);
+          },
+        }));
+      }
+    }
+
+    // Fallback to local filtering
     const query = searchQuery.toLowerCase();
     return items.filter(item => 
       item.title.toLowerCase().includes(query) ||
-      item.subtitle.toLowerCase().includes(query) ||
+      item.subtitle?.toLowerCase().includes(query) ||
+      item.description?.toLowerCase().includes(query) ||
       item.category.toLowerCase().includes(query)
     );
-  }, [items, searchQuery]);
+  }, [items, searchQuery, globalSearch, navigateToResult, navigate]);
 
   // Group items by category
   const groupedItems = useMemo(() => {
@@ -222,6 +243,11 @@ const CommandPalette = () => {
                                   {item.title}
                                 </div>
                                 <div className="text-xs text-slate-500">{item.subtitle}</div>
+                                {item.description && (
+                                  <div className="text-xs text-slate-400 mt-0.5 line-clamp-1">
+                                    {item.description}
+                                  </div>
+                                )}
                               </div>
                               <ArrowRight className="h-4 w-4 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity" />
                             </motion.button>

@@ -5,6 +5,8 @@ import { Card, CardContent } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
 import { useAuth } from '../../contexts/AuthContext';
+import { useCollaboration } from '../../contexts/CollaborationContext';
+import CollaborationCursor from '../../components/CollaborationCursor';
 import { PLATFORMS, getPlatformsByCategory } from '../../lib/platforms';
 import { unifiedAPI } from '../../lib/unifiedAPI';
 import { StaggerContainer, StaggerItem } from '../../components/animations/StaggerChildren';
@@ -377,9 +379,10 @@ const Dashboard = () => {
                 </div>
               </div>
             </motion.div>
+            </StaggerItem>
           );
         })}
-      </div>
+      </StaggerContainer>
 
       {/* Welcome Banner - Matching Landing Page */}
       <motion.div

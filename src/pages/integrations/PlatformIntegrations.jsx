@@ -176,6 +176,7 @@ const PlatformIntegrations = () => {
           </CardContent>
         </Card>
       </motion.div>
+      </StaggerItem>
     );
   };
 

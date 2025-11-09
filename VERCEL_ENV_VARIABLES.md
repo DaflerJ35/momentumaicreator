@@ -60,6 +60,34 @@ VITE_STRIPE_PUBLISHABLE_KEY=pk_live_xxxxxxxxxxxxxxxxxxxxxxxx
 VITE_APP_URL=https://yourdomain.com
 ```
 
+### Backend/Server Variables (Required for API routes and Stripe)
+```
+NODE_ENV=production
+STRIPE_SECRET_KEY=sk_live_xxxxxxxxxxxxxxxxxxxxxxxx
+STRIPE_WEBHOOK_SECRET=whsec_xxxxxxxxxxxxxxxxxxxxxxxx
+STRIPE_MONTHLY_PRO_PRICE_ID=price_xxxxxxxxxxxxxxxxxxxxxxxx
+STRIPE_MONTHLY_BUSINESS_PRICE_ID=price_xxxxxxxxxxxxxxxxxxxxxxxx
+STRIPE_MONTHLY_BUSINESS_PLUS_PRICE_ID=price_xxxxxxxxxxxxxxxxxxxxxxxx
+STRIPE_6MONTH_PRO_PRICE_ID=price_xxxxxxxxxxxxxxxxxxxxxxxx
+STRIPE_6MONTH_BUSINESS_PRICE_ID=price_xxxxxxxxxxxxxxxxxxxxxxxx
+STRIPE_6MONTH_BUSINESS_PLUS_PRICE_ID=price_xxxxxxxxxxxxxxxxxxxxxxxx
+STRIPE_YEARLY_PRO_PRICE_ID=price_xxxxxxxxxxxxxxxxxxxxxxxx
+STRIPE_YEARLY_BUSINESS_PRICE_ID=price_xxxxxxxxxxxxxxxxxxxxxxxx
+STRIPE_YEARLY_BUSINESS_PLUS_PRICE_ID=price_xxxxxxxxxxxxxxxxxxxxxxxx
+FRONTEND_URL=https://www.momentumaicreator.com
+API_URL=https://www.momentumaicreator.com
+```
+
+**Important Notes:**
+- **FRONTEND_URL:** Used for CORS and redirects (Stripe checkout, OAuth callbacks)
+- **API_URL:** Used for OAuth redirect URIs (Instagram, Twitter, YouTube, etc.)
+- **VITE_API_URL:** If using server AI (`VITE_USE_SERVER_AI=true`), also add:
+  ```
+  VITE_API_URL=https://www.momentumaicreator.com
+  ```
+
+**⚠️ Use your custom domain (`www.momentumaicreator.com`) not the Vercel URL!**
+
 ---
 
 ## 📝 Quick Copy-Paste Guide
@@ -158,9 +186,16 @@ After adding all variables:
 - [ ] All Firebase variables added
 - [ ] Google Gemini API key added
 - [ ] Stripe key added (if using payments)
+- [ ] All Stripe backend variables added (STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, all price IDs)
+- [ ] FRONTEND_URL set to production URL
+- [ ] VITE_API_URL set (if using server AI)
 - [ ] All variables set for Production environment
 - [ ] Redeployed the application
-- [ ] Tested the site to verify everything works
+- [ ] Tested authentication (auth modal opens correctly)
+- [ ] Tested AI health check
+- [ ] Tested pricing upgrade modal
+- [ ] Tested all `/api/*` endpoints
+- [ ] Verified CSP headers allow your production API domains (see vercel.json)
 
 ---
 
@@ -228,4 +263,30 @@ VITE_FIREBASE_AUTH_DOMAIN=your_value_here
 ---
 
 **You've got this! Just copy from your `.env` file and paste into Vercel!** 🚀
+
+---
+
+## 🔒 CSP Configuration for Production API Domains
+
+If you're using a custom domain or separate API server, you may need to update the Content Security Policy (CSP) in `vercel.json`.
+
+### Current CSP includes:
+- `https://*.vercel.app` (all Vercel domains)
+- Firebase domains
+- Stripe domains
+- Google APIs
+
+### If using a custom domain:
+1. Open `momentum-ai/vercel.json`
+2. Find the `Content-Security-Policy` header
+3. Add your custom domain to `connect-src`:
+   ```json
+   "connect-src 'self' ... https://your-custom-domain.com ..."
+   ```
+4. Redeploy after updating
+
+### If using a separate API server:
+Add your API server domain to `connect-src` in the CSP header.
+
+**Example:** If your API is at `https://api.example.com`, update the CSP to include it in `connect-src`.
 

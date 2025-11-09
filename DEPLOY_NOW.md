@@ -1,144 +1,124 @@
-# 🚀 DEPLOY NOW - STEP BY STEP
+# 🚀 DEPLOY TO VERCEL NOW - Quick Guide
 
-## ✅ GOOD NEWS: Your build works! Now let's get it online.
-
-### What I Just Fixed:
-1. ✅ Fixed `vercel.json` configuration
-2. ✅ Created `api/index.js` for serverless functions
-3. ✅ Verified build succeeds locally
-4. ✅ Updated CSP headers for Vercel
-
----
-
-## 🎯 DEPLOY IN 3 STEPS (5 minutes)
-
-### STEP 1: Push to GitHub (1 minute)
+## Option 1: Push to GitHub (Auto-Deploy if connected)
+If Vercel is already connected to your GitHub repo, just push:
 
 ```bash
-git add .
-git commit -m "Ready for deployment"
-git push
+git push origin main
 ```
 
-### STEP 2: Deploy to Vercel (2 minutes)
+Vercel will automatically deploy!
 
-1. **Go to:** https://vercel.com/new
-2. **Connect GitHub** and select your repository
-3. **Configure:**
-   - Framework: **Vite** (auto-detected)
-   - Root Directory: `./` 
-   - Build Command: `npm run build` (auto-filled)
-   - Output Directory: `dist` (auto-filled)
-4. **Click "Deploy"** (skip environment variables for now)
+## Option 2: Deploy via Vercel Dashboard
 
-### STEP 3: Add Environment Variables (2 minutes)
+1. **Go to Vercel Dashboard**
+   - Visit: https://vercel.com/dashboard
+   - Sign in with your GitHub account
 
-After first deployment:
+2. **Import Project (if not already imported)**
+   - Click "Add New" → "Project"
+   - Import `DaflerJ35/momentumaicreator`
+   - Or click "Import" if you see it
 
-1. Go to **Project Settings → Environment Variables**
-2. Add these variables (get values from your `.env` files):
+3. **Configure Build Settings**
+   - **Framework Preset**: Vite
+   - **Root Directory**: `./` (root of repo)
+   - **Build Command**: `pnpm run build` (or `npm run build`)
+   - **Output Directory**: `dist`
+   - **Install Command**: `pnpm install` (or `npm install`)
 
-#### Frontend Variables:
+4. **Add Environment Variables**
+   Go to Settings → Environment Variables and add:
+
+   ### Required Frontend Variables:
+   ```
+   VITE_FIREBASE_API_KEY=your_key
+   VITE_FIREBASE_AUTH_DOMAIN=your_domain
+   VITE_FIREBASE_PROJECT_ID=your_project_id
+   VITE_FIREBASE_STORAGE_BUCKET=your_bucket
+   VITE_FIREBASE_MESSAGING_SENDER_ID=your_sender_id
+   VITE_FIREBASE_APP_ID=your_app_id
+   VITE_FIREBASE_DATABASE_URL=your_database_url
+   VITE_GOOGLE_GENERATIVE_AI_API_KEY=your_gemini_key
+   VITE_STRIPE_PUBLISHABLE_KEY=your_stripe_key
+   ```
+
+   ### Required Backend Variables (for API routes):
+   ```
+   STRIPE_SECRET_KEY=your_stripe_secret
+   FRONTEND_URL=https://www.momentumaicreator.com
+   API_URL=https://www.momentumaicreator.com
+   NODE_ENV=production
+   ```
+   
+   **Important:** 
+   - Use your custom domain `https://www.momentumaicreator.com` for both `FRONTEND_URL` and `API_URL`
+   - `FRONTEND_URL` is used for CORS and redirects
+   - `API_URL` is used for OAuth redirect URIs (Instagram, Twitter, etc.)
+
+5. **Deploy**
+   - Click "Deploy"
+   - Wait for build to complete
+   - Your app will be live!
+
+## Option 3: Use Vercel CLI (Alternative)
+
+If CLI works on your system:
+
+```bash
+# Install Vercel CLI
+npm i -g vercel
+
+# Login
+vercel login
+
+# Deploy
+vercel --prod
 ```
-VITE_FIREBASE_API_KEY=your_key
-VITE_FIREBASE_AUTH_DOMAIN=your-project.firebaseapp.com
-VITE_FIREBASE_PROJECT_ID=your-project-id
-VITE_FIREBASE_STORAGE_BUCKET=your-project.appspot.com
-VITE_FIREBASE_MESSAGING_SENDER_ID=your_sender_id
-VITE_FIREBASE_APP_ID=your_app_id
-VITE_FIREBASE_DATABASE_URL=https://your-project-default-rtdb.firebaseio.com/
-VITE_GEMINI_API_KEY=your_gemini_key
-VITE_STRIPE_PUBLISHABLE_KEY=pk_live_xxxxxxxxx
-VITE_APP_URL=https://your-project.vercel.app
-```
 
-#### Backend Variables:
-```
-NODE_ENV=production
-FRONTEND_URL=https://your-project.vercel.app
-STRIPE_SECRET_KEY=sk_live_xxxxxxxxx
-STRIPE_WEBHOOK_SECRET=whsec_xxxxxxxxx
-STRIPE_MONTHLY_PRO_PRICE_ID=price_xxxxxxxxx
-STRIPE_MONTHLY_BUSINESS_PRICE_ID=price_xxxxxxxxx
-STRIPE_6MONTH_PRO_PRICE_ID=price_xxxxxxxxx
-STRIPE_YEARLY_BUSINESS_PRICE_ID=price_xxxxxxxxx
-```
+## ✅ What's Already Configured
 
-3. **Redeploy:** Go to Deployments → Latest → "Redeploy"
+- ✅ `vercel.json` - API routing configured
+- ✅ `api/index.js` - Serverless function entry point
+- ✅ Build command - `pnpm run build`
+- ✅ Output directory - `dist`
+- ✅ Security headers - CSP, CORS, etc.
 
----
+## 🎯 After Deployment
 
-## 🔍 TROUBLESHOOTING
+1. **Set up Custom Domain** (www.momentumaicreator.com)
+   - Go to Vercel Dashboard → Your Project → Settings → Domains
+   - Add `www.momentumaicreator.com` and `momentumaicreator.com`
+   - Follow Vercel's DNS instructions to configure your domain
+   - Wait for SSL certificate to be issued (usually takes a few minutes)
 
-### Issue: "Build failed"
-**Solution:** Check deployment logs. Usually means:
-- Missing dependencies → Run `npm install` locally
-- Build errors → Check for TypeScript/import errors
+2. **Update Environment Variables** with your custom domain:
+   - `FRONTEND_URL=https://www.momentumaicreator.com`
+   - `VITE_APP_URL=https://www.momentumaicreator.com` (if using server AI)
 
-### Issue: "API routes return 404"
-**Solution:** 
+3. **Test the app**
+   - Visit `https://www.momentumaicreator.com`
+   - Check API routes - Test `/api/*` endpoints
+   - Verify Firebase - Test authentication
+   - Test Stripe - Verify checkout flow
+   - Test auth modal - Visit `https://www.momentumaicreator.com/dashboard?showAuth=1`
+
+## 🔍 Troubleshooting
+
+### Build Fails
+- Check Node.js version (should be 18+)
+- Verify all environment variables are set
+- Check build logs in Vercel dashboard
+
+### API Routes Not Working
 - Verify `api/index.js` exists
-- Check Vercel Functions logs
-- Make sure environment variables are set
+- Check serverless function logs in Vercel
+- Ensure backend environment variables are set
 
-### Issue: "Firebase not working"
-**Solution:**
-- Verify ALL `VITE_FIREBASE_*` variables are set
-- Check Firebase console for API restrictions
-- Add your Vercel domain to Firebase authorized domains
+### CORS Errors
+- Update `FRONTEND_URL` to your Vercel URL
+- Check CSP headers in `vercel.json`
 
-### Issue: "CORS errors"
-**Solution:**
-- Set `FRONTEND_URL` to your exact Vercel domain
-- Add domain to Firebase authorized domains
-- Verify CORS settings in `server/middleware/security.js`
+## 🚀 Ready to Rock!
 
----
-
-## ✅ VERIFY DEPLOYMENT
-
-After deployment, test:
-
-1. **Homepage:** `https://your-project.vercel.app` ✅
-2. **API Health:** `https://your-project.vercel.app/api/health` ✅
-3. **Sign In:** Test authentication ✅
-4. **Check Console:** No errors in browser console ✅
-
----
-
-## 🎉 YOU'RE ONLINE!
-
-Once deployed, your site will be live at:
-`https://your-project.vercel.app`
-
-**Next Steps:**
-1. Test all features
-2. Set up custom domain (optional)
-3. Configure Stripe webhooks
-4. Monitor error logs
-
----
-
-## 🆘 STILL HAVING ISSUES?
-
-1. **Check Vercel deployment logs** - They show exact errors
-2. **Check browser console** - Shows frontend errors  
-3. **Test API:** `/api/health` should return `{"status":"ok"}`
-4. **Verify environment variables** are all set correctly
-
-**Common fixes:**
-- Missing env var → Add it in Vercel dashboard
-- Build error → Check logs, fix code, redeploy
-- API error → Check server logs, verify server code
-
----
-
-## 📝 NOTES
-
-- **Build works locally** ✅ - So deployment will work
-- **All files are in place** ✅ - `api/index.js` created
-- **Configuration is correct** ✅ - `vercel.json` fixed
-- **You just need to:** Push code + Deploy + Add env vars
-
-**YOU GOT THIS!** 🚀
-
+Your app is configured and ready to deploy. Choose any option above and you're good to go!

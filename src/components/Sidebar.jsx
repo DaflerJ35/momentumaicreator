@@ -140,8 +140,20 @@ const Sidebar = ({ isOpen, onToggle, routes = [] }) => {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [activeSection, setActiveSection] = useState('general');
   
+  // Filter routes based on authentication status
+  // Only show protected routes when user is authenticated
+  // Always show public routes (protected: false or undefined)
+  const filteredRoutes = routes.filter(route => {
+    // If route is protected, only show if user is authenticated
+    if (route.protected === true) {
+      return !!currentUser;
+    }
+    // Show public routes regardless of authentication status
+    return true;
+  });
+  
   // Ensure all routes have required properties before grouping
-  const processedRoutes = routes.map(route => ({
+  const processedRoutes = filteredRoutes.map(route => ({
     ...route,
     icon: route.icon || Home // Fallback to Home icon if none provided
   }));
@@ -195,10 +207,30 @@ const Sidebar = ({ isOpen, onToggle, routes = [] }) => {
           {/* Logo and collapse button */}
           <div className="flex items-center justify-between h-16 px-4 border-b border-slate-800">
             {!isCollapsed && (
-              <Link to="/" className="flex items-center">
+              <Link to="/" className="flex items-center gap-2">
+                <img 
+                  src="/momentum-logo.png" 
+                  alt="Momentum AI" 
+                  className="h-8 w-8 object-contain"
+                  onError={(e) => {
+                    e.target.style.display = 'none';
+                  }}
+                />
                 <span className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-emerald-400 to-cyan-400">
                   Momentum AI
                 </span>
+              </Link>
+            )}
+            {isCollapsed && (
+              <Link to="/" className="flex items-center justify-center w-full">
+                <img 
+                  src="/momentum-logo.png" 
+                  alt="Momentum AI" 
+                  className="h-8 w-8 object-contain"
+                  onError={(e) => {
+                    e.target.style.display = 'none';
+                  }}
+                />
               </Link>
             )}
             
