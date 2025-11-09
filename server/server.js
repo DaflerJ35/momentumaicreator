@@ -345,6 +345,7 @@ const teamRoutes = require('./routes/teams');
 const multimediaRoutes = require('./routes/multimedia');
 const platformRoutes = require('./routes/platforms');
 const blogRoutes = require('./routes/blog');
+const newsletterRoutes = require('./routes/newsletter');
 
 // AI API Endpoints
 // Generate content
@@ -596,6 +597,7 @@ app.use('/api/teams', teamRoutes);
 app.use('/api/multimedia', multimediaRoutes);
 app.use('/api/platforms', platformRoutes);
 app.use('/api/blog', blogRoutes);
+app.use('/api/newsletter', newsletterRoutes);
 
 // Marketplace checkout endpoint
 app.post('/api/marketplace/checkout', async (req, res) => {
