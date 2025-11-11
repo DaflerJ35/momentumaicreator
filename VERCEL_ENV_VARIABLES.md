@@ -53,6 +53,13 @@ VITE_GOOGLE_GENERATIVE_AI_API_KEY=your_gemini_api_key
 ### Stripe (Required if using payments)
 ```
 VITE_STRIPE_PUBLISHABLE_KEY=your_stripe_publishable_key_here
+
+# Optional: Override Stripe Product IDs (if different from defaults)
+# These are optional - defaults are used if not set
+STRIPE_PRO_PRODUCT_ID=prod_your_pro_product_id_here
+STRIPE_BUSINESS_PRODUCT_ID=prod_your_business_product_id_here
+STRIPE_BUSINESS_PLUS_PRODUCT_ID=prod_your_business_plus_product_id_here
+STRIPE_FREE_PRODUCT_ID=prod_your_free_product_id_here
 ```
 
 ### App Configuration (Optional)
@@ -78,13 +85,94 @@ FRONTEND_URL=https://www.momentumaicreator.com
 API_URL=https://www.momentumaicreator.com
 ```
 
+### Platform OAuth Credentials (Required for platform integrations)
+
+**⚠️ IMPORTANT: OAuth Callback URLs**
+
+Before configuring OAuth credentials, you must set up the callback URLs in each platform's developer dashboard. The callback URLs follow this pattern:
+
+```
+{API_URL}/api/platforms/{platformId}/oauth/callback
+```
+
+**Example for production:**
+```
+https://www.momentumaicreator.com/api/platforms/instagram/oauth/callback
+https://www.momentumaicreator.com/api/platforms/twitter/oauth/callback
+https://www.momentumaicreator.com/api/platforms/youtube/oauth/callback
+https://www.momentumaicreator.com/api/platforms/linkedin/oauth/callback
+https://www.momentumaicreator.com/api/platforms/facebook/oauth/callback
+https://www.momentumaicreator.com/api/platforms/tiktok/oauth/callback
+```
+
+**Make sure `API_URL` matches your production domain exactly!**
+
+```
+# Encryption and OAuth State Secrets (REQUIRED in production)
+# Generate with: openssl rand -hex 32
+# These must be the same across all server instances
+TOKEN_ENCRYPTION_KEY=your-64-character-hex-encryption-key-here
+OAUTH_STATE_SECRET=your-64-character-hex-oauth-state-secret-here
+
+# Instagram Basic Display API
+INSTAGRAM_CLIENT_ID=your-instagram-client-id
+INSTAGRAM_CLIENT_SECRET=your-instagram-client-secret
+# Callback URL: {API_URL}/api/platforms/instagram/oauth/callback
+# Configure in: https://developers.facebook.com/apps/
+
+# Twitter/X OAuth 2.0 (uses PKCE automatically)
+TWITTER_CLIENT_ID=your-twitter-client-id
+TWITTER_CLIENT_SECRET=your-twitter-client-secret
+# Callback URL: {API_URL}/api/platforms/twitter/oauth/callback
+# Configure in: https://developer.twitter.com/en/portal/dashboard
+# Note: Enable OAuth 2.0 and PKCE in Twitter app settings
+
+# Google/YouTube OAuth
+GOOGLE_CLIENT_ID=your-google-client-id
+GOOGLE_CLIENT_SECRET=your-google-client-secret
+# Callback URL: {API_URL}/api/platforms/youtube/oauth/callback
+# Configure in: https://console.cloud.google.com/apis/credentials
+# Required scopes: https://www.googleapis.com/auth/youtube.upload, https://www.googleapis.com/auth/youtube
+
+# LinkedIn OAuth 2.0 (uses PKCE automatically)
+LINKEDIN_CLIENT_ID=your-linkedin-client-id
+LINKEDIN_CLIENT_SECRET=your-linkedin-client-secret
+# Callback URL: {API_URL}/api/platforms/linkedin/oauth/callback
+# Configure in: https://www.linkedin.com/developers/apps
+# Required scopes: r_liteprofile, r_emailaddress, w_member_social
+
+# Facebook OAuth
+FACEBOOK_APP_ID=your-facebook-app-id
+FACEBOOK_APP_SECRET=your-facebook-app-secret
+# Callback URL: {API_URL}/api/platforms/facebook/oauth/callback
+# Configure in: https://developers.facebook.com/apps/
+# Required scopes: pages_manage_posts, pages_read_engagement
+
+# TikTok OAuth (uses PKCE automatically)
+TIKTOK_CLIENT_KEY=your-tiktok-client-key
+TIKTOK_CLIENT_SECRET=your-tiktok-client-secret
+# Callback URL: {API_URL}/api/platforms/tiktok/oauth/callback
+# Configure in: https://developers.tiktok.com/
+# Required scopes: user.info.basic, video.upload
+```
+
 **Important Notes:**
-- **FRONTEND_URL:** Used for CORS and redirects (Stripe checkout, OAuth callbacks)
+- **FRONTEND_URL:** Used for CORS and redirects (Stripe checkout, OAuth callbacks). Must match your production domain exactly.
 - **API_URL:** Used for OAuth redirect URIs (Instagram, Twitter, YouTube, etc.)
+  - **OAuth Callback URLs must be configured as:** `{API_URL}/api/platforms/{platformId}/oauth/callback`
+  - Example: `https://www.momentumaicreator.com/api/platforms/instagram/oauth/callback`
+  - **CRITICAL:** Add these exact URLs in each platform's OAuth app settings BEFORE testing
+  - If API_URL and FRONTEND_URL are the same domain, set both to your production domain
+  - For Vercel deployments, typically: `API_URL=https://www.momentumaicreator.com` and `FRONTEND_URL=https://www.momentumaicreator.com`
 - **VITE_API_URL:** If using server AI (`VITE_USE_SERVER_AI=true`), also add:
   ```
   VITE_API_URL=https://www.momentumaicreator.com
   ```
+- **TOKEN_ENCRYPTION_KEY and OAUTH_STATE_SECRET:** Required in production. Generate secure random keys:
+  ```bash
+  openssl rand -hex 32
+  ```
+  These must be the same across all server instances to decrypt tokens and verify OAuth state.
 
 **⚠️ Use your custom domain (`www.momentumaicreator.com`) not the Vercel URL!**
 
@@ -188,12 +276,18 @@ After adding all variables:
 - [ ] Stripe key added (if using payments)
 - [ ] All Stripe backend variables added (STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, all price IDs)
 - [ ] FRONTEND_URL set to production URL
+- [ ] API_URL set to production URL (must match OAuth callback URLs)
+- [ ] TOKEN_ENCRYPTION_KEY generated and added (required in production)
+- [ ] OAUTH_STATE_SECRET generated and added (required in production)
+- [ ] All platform OAuth credentials added (Instagram, Twitter, LinkedIn, Facebook, TikTok, Google)
+- [ ] OAuth callback URLs configured in each platform's OAuth app settings
 - [ ] VITE_API_URL set (if using server AI)
 - [ ] All variables set for Production environment
 - [ ] Redeployed the application
 - [ ] Tested authentication (auth modal opens correctly)
 - [ ] Tested AI health check
 - [ ] Tested pricing upgrade modal
+- [ ] Tested platform integrations (OAuth flows work correctly)
 - [ ] Tested all `/api/*` endpoints
 - [ ] Verified CSP headers allow your production API domains (see vercel.json)
 
