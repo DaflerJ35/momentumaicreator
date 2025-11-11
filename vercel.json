@@ -1,0 +1,50 @@
+{
+  "version": 2,
+  "buildCommand": "cd momentum-ai && npm run build",
+  "outputDirectory": "momentum-ai/dist",
+  "framework": null,
+  "functions": {
+    "momentum-ai/api/server.js": {
+      "runtime": "@vercel/node",
+      "maxDuration": 30
+    }
+  },
+  "rewrites": [
+    {
+      "source": "/api/(.*)",
+      "destination": "/momentum-ai/api/server.js"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/momentum-ai/dist/$1"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/api/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-cache, no-store, must-revalidate"
+        }
+      ]
+    },
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "X-Frame-Options",
+          "value": "DENY"
+        },
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        },
+        {
+          "key": "Referrer-Policy",
+          "value": "strict-origin-when-cross-origin"
+        }
+      ]
+    }
+  ]
+}

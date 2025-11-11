@@ -1,0 +1,125 @@
+name: Security Scan
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  schedule:
+    # Run daily at 2 AM UTC
+    - cron: '0 2 * * *'
+
+jobs:
+  secret-scan:
+    name: Secret Scanning
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history for better detection
+      
+      - name: Run Gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
+        with:
+          config-path: .gitleaks.toml
+          exit-code: 1
+          no-git: false
+          verbose: true
+          redact: true
+          fail: true
+          
+      - name: Check for secrets in PRs
+        if: github.event_name == 'pull_request'
+        run: |
+          echo "🔍 Scanning for secrets in PR #${{ github.event.pull_request.number }}"
+          echo "This check will block the PR if secrets are detected"
+      
+      - name: Upload results
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gitleaks-report
+          path: |
+            .gitleaks/*
+          retention-days: 30
+
+  env-file-check:
+    name: Environment File Check
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Check for committed .env files
+        run: |
+          if git ls-files | grep -E '\.env$' | grep -v '.env.example'; then
+            echo "❌ ERROR: .env files found in repository!"
+            echo "The following .env files are committed:"
+            git ls-files | grep -E '\.env$' | grep -v '.env.example'
+            echo ""
+            echo "Please remove these files and add them to .gitignore"
+            exit 1
+          else
+            echo "✅ No .env files found in repository (except .env.example)"
+          fi
+      
+      - name: Check for secrets in .env.example files
+        run: |
+          echo "🔍 Checking for live secrets in .env.example files..."
+          if grep -rE "sk_live_|pk_live_|whsec_[a-zA-Z0-9]{32,}|AIza[0-9A-Za-z_-]{35}" --include="*.example" --include="*.env.example" . 2>/dev/null; then
+            echo "❌ ERROR: Possible live secrets found in example files!"
+            echo "Example files should only contain placeholders like 'your_key_here'"
+            exit 1
+          else
+            echo "✅ No live secrets found in example files"
+          fi
+          
+      - name: Verify server/.env is not committed
+        run: |
+          if git ls-files | grep -E "server/\.env$"; then
+            echo "❌ ERROR: server/.env file is committed to repository!"
+            echo "Please remove it and add to .gitignore"
+            exit 1
+          else
+            echo "✅ server/.env is properly ignored"
+          fi
+
+  dependency-scan:
+    name: Dependency Vulnerability Scan
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: |
+            momentum-ai/package-lock.json
+            momentum-ai/server/package-lock.json
+      
+      - name: Install dependencies
+        working-directory: momentum-ai
+        run: npm ci
+      
+      - name: Install server dependencies
+        working-directory: momentum-ai/server
+        run: npm ci
+      
+      - name: Run npm audit
+        working-directory: momentum-ai
+        run: npm audit --audit-level=moderate || true
+      
+      - name: Run npm audit (server)
+        working-directory: momentum-ai/server
+        run: npm audit --audit-level=moderate || true
+

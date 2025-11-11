@@ -1,0 +1,96 @@
+# Gitleaks configuration for secret scanning
+# This file configures gitleaks to detect secrets in the codebase
+
+title = "Momentum AI Secret Scanning"
+
+[extend]
+# Use default gitleaks rules
+useDefault = true
+
+[[rules]]
+# Stripe API keys
+id = "stripe-api-key"
+description = "Stripe API key"
+regex = '''sk_live_[0-9a-zA-Z]{24,}'''
+tags = ["stripe", "api-key", "payment"]
+
+[[rules]]
+id = "stripe-publishable-key"
+description = "Stripe publishable key"
+regex = '''pk_live_[0-9a-zA-Z]{24,}'''
+tags = ["stripe", "api-key", "payment"]
+
+[[rules]]
+id = "stripe-webhook-secret"
+description = "Stripe webhook secret"
+regex = '''whsec_[a-zA-Z0-9]{32,}'''
+tags = ["stripe", "webhook", "secret"]
+
+[[rules]]
+id = "google-api-key"
+description = "Google API key (Gemini)"
+regex = '''AIza[0-9A-Za-z_-]{35}'''
+tags = ["google", "api-key", "gemini"]
+
+[[rules]]
+id = "firebase-private-key"
+description = "Firebase private key"
+regex = '''-----BEGIN PRIVATE KEY-----'''
+tags = ["firebase", "private-key", "auth"]
+
+[[rules]]
+id = "firebase-service-account"
+description = "Firebase service account JSON"
+regex = '''"type":\s*"service_account"'''
+tags = ["firebase", "service-account"]
+
+[[rules]]
+id = "ollama-api-key"
+description = "Ollama API key"
+regex = '''ollama_[a-zA-Z0-9]{32,}'''
+tags = ["ollama", "api-key"]
+
+[[rules]]
+id = "redis-url-with-password"
+description = "Redis URL with password"
+regex = '''redis://:[^@]+@'''
+tags = ["redis", "password", "database"]
+
+[[rules]]
+id = "smtp-password"
+description = "SMTP password in connection string"
+regex = '''smtp://[^:]+:[^@]+@'''
+tags = ["smtp", "email", "password"]
+
+# Allowlist common false positives
+[[allowlist]]
+description = "Allow test files with mock keys"
+paths = [
+    '''server/__tests__/.*\.js$''',
+    '''\.test\.js$''',
+    '''\.spec\.js$''',
+]
+
+[[allowlist]]
+description = "Allow example files with placeholder values"
+paths = [
+    '''\.env\.example$''',
+    '''\.example$''',
+]
+
+[[allowlist]]
+description = "Allow documentation files"
+paths = [
+    '''\.md$''',
+    '''README.*''',
+    '''CHANGELOG.*''',
+]
+
+# Ignore specific patterns in code comments
+[[allowlist]]
+description = "Allow commented examples"
+regexes = [
+    '''#.*your_.*_here''',
+    '''//.*your_.*_here''',
+    '''/\*.*your_.*_here.*\*/''',
+]
