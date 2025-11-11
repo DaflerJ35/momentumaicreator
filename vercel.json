@@ -1,6 +1,5 @@
 {
   "version": 2,
-  "buildCommand": "cd momentum-ai && npm run build",
   "outputDirectory": "momentum-ai/dist",
   "framework": null,
   "rewrites": [
