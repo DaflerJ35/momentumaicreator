@@ -3,11 +3,6 @@
   "buildCommand": "cd momentum-ai && npm run build",
   "outputDirectory": "momentum-ai/dist",
   "framework": null,
-  "functions": {
-    "momentum-ai/api/server.js": {
-      "maxDuration": 30
-    }
-  },
   "rewrites": [
     {
       "source": "/api/(.*)",
