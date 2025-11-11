@@ -50,37 +50,15 @@ VITE_FIREBASE_DATABASE_URL=https://your-project-default-rtdb.firebaseio.com
 VITE_GOOGLE_GENERATIVE_AI_API_KEY=your_gemini_api_key
 ```
 
-### Stripe (Required if using payments)
-```
-VITE_STRIPE_PUBLISHABLE_KEY=your_stripe_publishable_key_here
-
-# Optional: Override Stripe Product IDs (if different from defaults)
-# These are optional - defaults are used if not set
-STRIPE_PRO_PRODUCT_ID=prod_your_pro_product_id_here
-STRIPE_BUSINESS_PRODUCT_ID=prod_your_business_product_id_here
-STRIPE_BUSINESS_PLUS_PRODUCT_ID=prod_your_business_plus_product_id_here
-STRIPE_FREE_PRODUCT_ID=prod_your_free_product_id_here
-```
 
 ### App Configuration (Optional)
 ```
 VITE_APP_URL=https://yourdomain.com
 ```
 
-### Backend/Server Variables (Required for API routes and Stripe)
+### Backend/Server Variables (Required for API routes)
 ```
 NODE_ENV=production
-STRIPE_SECRET_KEY=your_stripe_secret_key_here
-STRIPE_WEBHOOK_SECRET=your_webhook_secret_here
-STRIPE_MONTHLY_PRO_PRICE_ID=price_xxxxxxxxxxxxxxxxxxxxxxxx
-STRIPE_MONTHLY_BUSINESS_PRICE_ID=price_xxxxxxxxxxxxxxxxxxxxxxxx
-STRIPE_MONTHLY_BUSINESS_PLUS_PRICE_ID=price_xxxxxxxxxxxxxxxxxxxxxxxx
-STRIPE_6MONTH_PRO_PRICE_ID=price_xxxxxxxxxxxxxxxxxxxxxxxx
-STRIPE_6MONTH_BUSINESS_PRICE_ID=price_xxxxxxxxxxxxxxxxxxxxxxxx
-STRIPE_6MONTH_BUSINESS_PLUS_PRICE_ID=price_xxxxxxxxxxxxxxxxxxxxxxxx
-STRIPE_YEARLY_PRO_PRICE_ID=price_xxxxxxxxxxxxxxxxxxxxxxxx
-STRIPE_YEARLY_BUSINESS_PRICE_ID=price_xxxxxxxxxxxxxxxxxxxxxxxx
-STRIPE_YEARLY_BUSINESS_PLUS_PRICE_ID=price_xxxxxxxxxxxxxxxxxxxxxxxx
 FRONTEND_URL=https://www.momentumaicreator.com
 API_URL=https://www.momentumaicreator.com
 ```
@@ -196,7 +174,6 @@ TIKTOK_CLIENT_SECRET=your-tiktok-client-secret
 | `VITE_FIREBASE_APP_ID` | Your `.env` file |
 | `VITE_FIREBASE_DATABASE_URL` | Your `.env` file |
 | `VITE_GOOGLE_GENERATIVE_AI_API_KEY` | Your `.env` file |
-| `VITE_STRIPE_PUBLISHABLE_KEY` | Your `.env` file (if using Stripe) |
 | `VITE_APP_URL` | Your `.env` file (optional) |
 
 ---
@@ -219,7 +196,6 @@ TIKTOK_CLIENT_SECRET=your-tiktok-client-secret
 
 ### 1. Use Production Keys
 - For **Firebase**: Use your production Firebase config
-- For **Stripe**: Use your **LIVE** publishable key (`pk_live_...`) not test key
 - For **Gemini**: Use your production API key
 
 ### 2. Environment Selection
@@ -260,11 +236,6 @@ TIKTOK_CLIENT_SECRET=your-tiktok-client-secret
 2. Your API key is displayed there
 3. Copy it
 
-### From Stripe Dashboard:
-1. Go to [Stripe Dashboard](https://dashboard.stripe.com/)
-2. **Developers** → **API keys**
-3. Copy your **Publishable key** (use LIVE key for production)
-
 ---
 
 ## ✅ Verification Checklist
@@ -273,8 +244,6 @@ After adding all variables:
 
 - [ ] All Firebase variables added
 - [ ] Google Gemini API key added
-- [ ] Stripe key added (if using payments)
-- [ ] All Stripe backend variables added (STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, all price IDs)
 - [ ] FRONTEND_URL set to production URL
 - [ ] API_URL set to production URL (must match OAuth callback URLs)
 - [ ] TOKEN_ENCRYPTION_KEY generated and added (required in production)
