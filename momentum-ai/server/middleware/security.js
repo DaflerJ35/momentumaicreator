@@ -40,6 +40,14 @@ const signInLimiter = createRateLimiter(
   'Too many login attempts. Please try again later or reset your password.'
 );
 
+// Strict limiter for free AI endpoints (when FREE_AI_MODE=true)
+// Keep this fairly tight to prevent abuse while allowing testing
+const aiLimiter = createRateLimiter(
+  60 * 1000, // 1 minute
+  20, // max 20 AI requests per minute per IP
+  'Too many AI requests. Please slow down and try again shortly.'
+);
+
 // Security headers middleware
 const securityHeaders = (req, res, next) => {
   const isProduction = process.env.NODE_ENV === 'production';
@@ -49,16 +57,34 @@ const securityHeaders = (req, res, next) => {
   // In production, this should be the same origin or the API server URL
   // In development, allow localhost:3001 for the backend server
   const backendOrigins = [];
+  
+  // Use FRONTEND_URL for CORS (primary source of truth for allowed origins)
+  if (process.env.FRONTEND_URL) {
+    // Parse comma-separated origins if provided
+    const origins = process.env.FRONTEND_URL.split(',').map(origin => origin.trim());
+    origins.forEach(origin => {
+      try {
+        const url = new URL(origin);
+        backendOrigins.push(url.origin);
+      } catch (e) {
+        // If not a full URL, skip
+      }
+    });
+  }
+  
+  // Also check VITE_API_URL if set (for client-side API calls)
   if (process.env.VITE_API_URL) {
-    // Parse VITE_API_URL and add to allowed origins
     try {
       const apiUrl = new URL(process.env.VITE_API_URL);
-      backendOrigins.push(apiUrl.origin);
+      if (!backendOrigins.includes(apiUrl.origin)) {
+        backendOrigins.push(apiUrl.origin);
+      }
     } catch (e) {
       // If VITE_API_URL is not a full URL, assume same origin
     }
   }
-  // In development, always allow localhost:3001 for backend server
+  
+  // In development only, allow localhost:3001 for backend server
   if (isDevelopment) {
     backendOrigins.push('http://localhost:3001');
   }
@@ -153,6 +179,8 @@ const corsOptions = {
   allowedHeaders: ['Content-Type', 'Authorization'],
   maxAge: 600, // Cache preflight for 10 minutes
   optionsSuccessStatus: 204,
+  // In production, only allow specific origins (no wildcards)
+  // Origins are validated in server.js using FRONTEND_URL
 };
 
 // Input validation middleware
@@ -191,6 +219,7 @@ module.exports = {
   authLimiter,
   signUpLimiter,
   signInLimiter,
+  aiLimiter,
   createRateLimiter,
   corsOptions,
   validateInput,

@@ -1,15 +1,23 @@
 {
   "version": 2,
+  "buildCommand": "cd momentum-ai && pnpm install --frozen-lockfile && pnpm run build",
   "outputDirectory": "momentum-ai/dist",
   "framework": null,
+  "functions": {
+    "momentum-ai/api/server.js": {
+      "runtime": "@vercel/node",
+      "maxDuration": 60,
+      "memory": 1536
+    }
+  },
   "rewrites": [
     {
-      "source": "/api/(.*)",
+      "source": "/api/:path*",
       "destination": "/momentum-ai/api/server.js"
     },
     {
       "source": "/(.*)",
-      "destination": "/momentum-ai/dist/$1"
+      "destination": "/momentum-ai/dist/index.html"
     }
   ],
   "headers": [
@@ -19,6 +27,44 @@
         {
           "key": "Cache-Control",
           "value": "no-cache, no-store, must-revalidate"
+        }
+      ]
+    },
+    {
+      "source": "/",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-store"
+        },
+        {
+          "key": "Vercel-CDN-Cache-Control",
+          "value": "max-age=0, s-maxage=0, stale-while-revalidate=0"
+        }
+      ]
+    },
+    {
+      "source": "/(.*\\.html)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-store"
+        },
+        {
+          "key": "Vercel-CDN-Cache-Control",
+          "value": "max-age=0, s-maxage=0, stale-while-revalidate=0"
+        },
+        {
+          "key": "X-Frame-Options",
+          "value": "DENY"
+        },
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        },
+        {
+          "key": "Referrer-Policy",
+          "value": "strict-origin-when-cross-origin"
         }
       ]
     },

@@ -51,17 +51,39 @@ VITE_GOOGLE_GENERATIVE_AI_API_KEY=your_gemini_api_key
 ```
 
 
-### App Configuration (Optional)
+### App Configuration (Required for Production)
 ```
-VITE_APP_URL=https://yourdomain.com
+# Set to your production domain
+VITE_APP_URL=https://www.momentumaicreator.com
+
+# Set to true if using server AI (recommended for production)
+VITE_USE_SERVER_AI=true
+
+# Set to your production API URL (same origin if API is serverless under same Vercel project)
+VITE_API_URL=https://www.momentumaicreator.com
 ```
 
 ### Backend/Server Variables (Required for API routes)
 ```
+# MUST be set to production in Vercel
 NODE_ENV=production
+
+# Set to your production domain (or comma-separated domains for multiple origins)
 FRONTEND_URL=https://www.momentumaicreator.com
+
+# Set to your production API domain (same as FRONTEND_URL if same origin)
 API_URL=https://www.momentumaicreator.com
 ```
+
+**⚠️ CRITICAL: Production Environment Variables**
+
+- **DO NOT** rely on local `.env` files for production - Vercel does NOT read local `.env` files
+- **ALL** environment variables must be set in Vercel Dashboard → Settings → Environment Variables
+- Set `NODE_ENV=production` in Vercel (not `development`)
+- Set `FRONTEND_URL` to your production domain (no `localhost` entries)
+- Set `VITE_USE_SERVER_AI=true` if using server AI
+- Set `VITE_API_URL` to your production domain (same origin if API is serverless)
+- Redeploy after setting environment variables
 
 ### Platform OAuth Credentials (Required for platform integrations)
 
@@ -135,17 +157,16 @@ TIKTOK_CLIENT_SECRET=your-tiktok-client-secret
 ```
 
 **Important Notes:**
-- **FRONTEND_URL:** Used for CORS and redirects (Stripe checkout, OAuth callbacks). Must match your production domain exactly.
+- **FRONTEND_URL:** Used for CORS and redirects (Stripe checkout, OAuth callbacks). Must match your production domain exactly. Remove any localhost entries for production.
 - **API_URL:** Used for OAuth redirect URIs (Instagram, Twitter, YouTube, etc.)
   - **OAuth Callback URLs must be configured as:** `{API_URL}/api/platforms/{platformId}/oauth/callback`
   - Example: `https://www.momentumaicreator.com/api/platforms/instagram/oauth/callback`
   - **CRITICAL:** Add these exact URLs in each platform's OAuth app settings BEFORE testing
   - If API_URL and FRONTEND_URL are the same domain, set both to your production domain
   - For Vercel deployments, typically: `API_URL=https://www.momentumaicreator.com` and `FRONTEND_URL=https://www.momentumaicreator.com`
-- **VITE_API_URL:** If using server AI (`VITE_USE_SERVER_AI=true`), also add:
-  ```
-  VITE_API_URL=https://www.momentumaicreator.com
-  ```
+- **VITE_USE_SERVER_AI:** Set to `true` in production if using server AI. If `false` or unset, AI calls will use client-side only.
+- **VITE_API_URL:** Required if `VITE_USE_SERVER_AI=true`. Set to your production domain (same origin if API is serverless under same Vercel project).
+- **NODE_ENV:** MUST be set to `production` in Vercel. Do not use `development` in production.
 - **TOKEN_ENCRYPTION_KEY and OAUTH_STATE_SECRET:** Required in production. Generate secure random keys:
   ```bash
   openssl rand -hex 32
@@ -242,23 +263,42 @@ TIKTOK_CLIENT_SECRET=your-tiktok-client-secret
 
 After adding all variables:
 
-- [ ] All Firebase variables added
-- [ ] Google Gemini API key added
-- [ ] FRONTEND_URL set to production URL
-- [ ] API_URL set to production URL (must match OAuth callback URLs)
-- [ ] TOKEN_ENCRYPTION_KEY generated and added (required in production)
-- [ ] OAUTH_STATE_SECRET generated and added (required in production)
+### Frontend Variables (VITE_*)
+- [ ] All Firebase variables added (`VITE_FIREBASE_*`)
+- [ ] Google Gemini API key added (`VITE_GOOGLE_GENERATIVE_AI_API_KEY`)
+- [ ] `VITE_APP_URL` set to production URL
+- [ ] `VITE_USE_SERVER_AI` set to `true` (if using server AI)
+- [ ] `VITE_API_URL` set to production URL (if using server AI)
+- [ ] `VITE_STRIPE_PUBLISHABLE_KEY` set (if using Stripe)
+
+### Backend Variables
+- [ ] `NODE_ENV` set to `production` (NOT `development`)
+- [ ] `FRONTEND_URL` set to production URL (no localhost entries)
+- [ ] `API_URL` set to production URL (must match OAuth callback URLs)
+- [ ] `TOKEN_ENCRYPTION_KEY` generated and added (required in production)
+- [ ] `OAUTH_STATE_SECRET` generated and added (required in production)
 - [ ] All platform OAuth credentials added (Instagram, Twitter, LinkedIn, Facebook, TikTok, Google)
+- [ ] Stripe keys added (`STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`)
+- [ ] All Stripe price IDs added
+
+### OAuth Configuration
 - [ ] OAuth callback URLs configured in each platform's OAuth app settings
-- [ ] VITE_API_URL set (if using server AI)
-- [ ] All variables set for Production environment
-- [ ] Redeployed the application
+- [ ] Callback URLs match pattern: `{API_URL}/api/platforms/{platformId}/oauth/callback`
+
+### Deployment
+- [ ] All variables set for Production environment in Vercel
+- [ ] Redeployed the application after setting variables
+- [ ] Verified variables are present in Vercel function logs
+
+### Testing
 - [ ] Tested authentication (auth modal opens correctly)
-- [ ] Tested AI health check
+- [ ] Tested AI health check (`/api/health` returns JSON, not HTML)
 - [ ] Tested pricing upgrade modal
 - [ ] Tested platform integrations (OAuth flows work correctly)
 - [ ] Tested all `/api/*` endpoints
-- [ ] Verified CSP headers allow your production API domains (see vercel.json)
+- [ ] Verified CSP headers allow your production API domains
+- [ ] Verified no CORS errors in browser console
+- [ ] Verified production calls hit deployed API (not localhost)
 
 ---
 

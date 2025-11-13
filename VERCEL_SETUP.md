@@ -113,26 +113,42 @@ openssl rand -hex 32
 
 ## Vercel Configuration
 
-The `vercel.json` file handles:
+**⚠️ IMPORTANT: Single Vercel Configuration**
 
-- **Frontend Build**: Vite build to `dist/` directory
-- **API Routes**: Serverless functions for `/api/*` routes
-- **Routing**: SPA routing with fallback to `index.html`
-- **Functions**: Node.js runtime with 30s timeout
+This project uses a **single `vercel.json` at the repository root**. The Vercel project should be linked at the repository root level.
+
+The root `vercel.json` file handles:
+
+- **Frontend Build**: Vite build to `momentum-ai/dist/` directory using pnpm
+- **API Routes**: Serverless functions for `/api/*` routes via `momentum-ai/api/server.js`
+- **Routing**: API routes first, then SPA routing with fallback to `index.html`
+- **Functions**: Node.js runtime with 60s timeout and 1536MB memory
+- **Cache Headers**: HTML routes have no-cache headers to prevent stale content
 
 ### File Structure for Vercel
 
 ```
-momentum-ai/
-├── vercel.json              # Vercel configuration
-├── package.json             # Frontend build scripts
-├── api/
-│   └── server.js           # API route wrapper
-├── server/
-│   ├── server.js           # Express app
-│   └── package.json        # Server dependencies
-└── src/                    # React frontend
+FINAL_MOMENTUMAI/           # Repository root
+├── vercel.json              # Vercel configuration (ACTIVE)
+├── momentum-ai/
+│   ├── package.json         # Frontend build scripts (uses pnpm)
+│   ├── api/
+│   │   └── server.js        # API route wrapper (exports Express app)
+│   ├── server/
+│   │   ├── server.js        # Express app
+│   │   └── package.json     # Server dependencies
+│   └── src/                 # React frontend
+└── .github/
+    └── workflows/
+        └── vercel-deploy.yml # CI/CD workflow (uses pnpm)
 ```
+
+### Build Configuration
+
+- **Build Command**: `cd momentum-ai && pnpm install --frozen-lockfile && pnpm run build`
+- **Output Directory**: `momentum-ai/dist`
+- **Package Manager**: pnpm (version 10.15.1)
+- **API Handler**: `momentum-ai/api/server.js` (single entry point)
 
 ## Post-Deployment Setup
 
@@ -193,6 +209,10 @@ You'll also need to add PWA icons:
 1. Check variable names (no `VITE_` prefix for backend)
 2. Redeploy after adding new variables
 3. Use Vercel's dashboard, not `.env` files for production
+4. Verify `NODE_ENV=production` is set (not `development`)
+5. Verify `FRONTEND_URL` and `API_URL` point to production domains (no localhost)
+6. Verify `VITE_USE_SERVER_AI=true` if using server AI
+7. Verify `VITE_API_URL` is set to production domain if using server AI
 
 ## Monitoring & Logs
 

@@ -14,16 +14,21 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 10.15.1
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '18'
-          cache: 'npm'
-          cache-dependency-path: momentum-ai/package-lock.json
+          cache: 'pnpm'
+          cache-dependency-path: momentum-ai/pnpm-lock.yaml
 
       - name: Install dependencies
         working-directory: momentum-ai
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       - name: Install server dependencies
         working-directory: momentum-ai/server
@@ -32,6 +37,10 @@ jobs:
       - name: Run tests
         working-directory: momentum-ai/server
         run: npm test -- --watchAll=false --passWithNoTests
+
+      - name: Build frontend
+        working-directory: momentum-ai
+        run: pnpm build
 
       - name: Install Vercel CLI
         run: npm i -g vercel

@@ -581,28 +581,47 @@ Automated testing runs on every push and PR via GitHub Actions:
 
 3. **Configure Build Settings**
    - **Framework Preset**: Vite
-   - **Build Command**: `npm run build`
-   - **Output Directory**: `dist`
-   - **Install Command**: `npm install`
+   - **Build Command**: `cd momentum-ai && pnpm install --frozen-lockfile && pnpm run build`
+   - **Output Directory**: `momentum-ai/dist`
+   - **Root Directory**: Leave empty (project is at repo root)
+   - **Package Manager**: pnpm (version 10.15.1)
 
 4. **Add Environment Variables**
+   **⚠️ IMPORTANT:** Vercel does NOT read local `.env` files. All variables must be set in Vercel Dashboard.
+   
    Add all variables from `.env` and `server/.env`:
    - `VITE_FIREBASE_*` (all Firebase config)
-   - `VITE_GEMINI_API_KEY`
+   - `VITE_GOOGLE_GENERATIVE_AI_API_KEY`
    - `VITE_STRIPE_PUBLISHABLE_KEY`
+   - `VITE_APP_URL` (production domain)
+   - `VITE_USE_SERVER_AI=true` (if using server AI)
+   - `VITE_API_URL` (production domain, if using server AI)
    - `STRIPE_SECRET_KEY`
    - `STRIPE_WEBHOOK_SECRET`
    - All Stripe price IDs
-   - `FRONTEND_URL`
-   - `NODE_ENV=production`
+   - `NODE_ENV=production` (NOT `development`)
+   - `FRONTEND_URL` (production domain, no localhost)
+   - `API_URL` (production domain, no localhost)
+   - `TOKEN_ENCRYPTION_KEY` (64-character hex)
+   - `OAUTH_STATE_SECRET` (64-character hex)
+   - All platform OAuth credentials (if using platform integrations)
 
 5. **Deploy!**
 
-   The `vercel.json` configuration handles:
-   - ✅ SPA routing
-   - ✅ API routes (`/api/*`)
+   The root `vercel.json` configuration handles:
+   - ✅ SPA routing (API routes first, then SPA fallback)
+   - ✅ API routes (`/api/*` via `momentum-ai/api/server.js`)
    - ✅ Static asset optimization
    - ✅ Security headers
+   - ✅ CDN cache headers for HTML (prevents stale content)
+   - ✅ Function configuration (60s timeout, 1536MB memory)
+
+   **⚠️ Important: Single Vercel Configuration**
+
+   - The project uses a **single `vercel.json` at the repository root**
+   - The Vercel project should be linked at the repository root
+   - Build command uses pnpm: `cd momentum-ai && pnpm install --frozen-lockfile && pnpm run build`
+   - API handler is `momentum-ai/api/server.js` (single entry point)
 
    **⚠️ Important: CSP Configuration**
 

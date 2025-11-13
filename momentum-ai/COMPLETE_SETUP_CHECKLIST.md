@@ -74,7 +74,7 @@
 ### 3.2 Redeploy Landing Page
 - [ ] Go to Landing Page Project → Deployments → Redeploy
 
-**📖 Guide:** See `content-sphere-glowup-page/CUSTOM_DOMAIN_SETUP.md`
+**📖 Guide:** See `Momentum_AI_LandingPage/CUSTOM_DOMAIN_SETUP.md`
 
 ---
 

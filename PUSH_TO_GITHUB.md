@@ -52,7 +52,7 @@ The landing page repo just needs:
 3. Push
 
 ```bash
-cd content-sphere-glowup-page
+cd Momentum_AI_LandingPage
 git pull
 # Resolve conflicts if any
 git add .

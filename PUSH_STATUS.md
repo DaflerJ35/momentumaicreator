@@ -15,7 +15,7 @@
 
 ---
 
-## ⚠️ SaaS App: Blocked by GitHub Secret Detection
+## ⚠️ SaaS App: GitHub Secret Detection
 
 **Status:** ⚠️ **BLOCKED** (GitHub detected Stripe key pattern in old commit)
 
@@ -25,6 +25,7 @@
 - ✅ Checkout form updates
 - ✅ Server updates for custom pricing
 - ✅ All environment variable configurations
+- ✅ Vercel configuration fixes (single vercel.json, pnpm build, cache headers)
 
 ---
 
@@ -60,6 +61,8 @@ git commit --amend
 git rebase --continue
 git push --force-with-lease
 ```
+
+**Note:** After unblocking, ensure Vercel is connected to the correct repo/project and triggers a deployment. Alternatively, deploy with `vercel --prod` from the correct project root after linking with `vercel link`.
 
 ---
 

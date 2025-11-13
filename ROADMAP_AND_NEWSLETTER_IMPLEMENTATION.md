@@ -3,7 +3,7 @@
 ## ✅ What Was Added
 
 ### 1. Roadmap Section (`RoadmapSection.tsx`)
-- **Location**: `content-sphere-glowup-page/src/components/RoadmapSection.tsx`
+- **Location**: `Momentum_AI_LandingPage/src/components/RoadmapSection.tsx`
 - **Features**:
   - Visual timeline showing completed features (✅) and upcoming features (🚀)
   - Organized by quarters (Q1 2026, Q2 2026, Q3 2026, Long-term)
@@ -13,7 +13,7 @@
   - Glass morphism styling matching the landing page theme
 
 ### 2. Newsletter Section (`NewsletterSection.tsx`)
-- **Location**: `content-sphere-glowup-page/src/components/NewsletterSection.tsx`
+- **Location**: `Momentum_AI_LandingPage/src/components/NewsletterSection.tsx`
 - **Features**:
   - Email subscription form with validation
   - Success/error states with toast notifications
@@ -37,14 +37,14 @@
   - Security: Input sanitization, XSS protection, rate limiting
 
 ### 4. Landing Page Updates
-- **Location**: `content-sphere-glowup-page/src/pages/Index.tsx`
+- **Location**: `Momentum_AI_LandingPage/src/pages/Index.tsx`
 - **Changes**:
   - Added RoadmapSection between FAQ and Newsletter
   - Added NewsletterSection between Roadmap and CTA
   - Both sections wrapped in ParallaxSection for scroll effects
 
 ### 5. Footer Updates
-- **Location**: `content-sphere-glowup-page/src/components/Footer.tsx`
+- **Location**: `Momentum_AI_LandingPage/src/components/Footer.tsx`
 - **Changes**:
   - Added "Roadmap" link to Platform section
   - Links to `#roadmap` section on the page

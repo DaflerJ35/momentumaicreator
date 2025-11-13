@@ -10,11 +10,17 @@ Great! Your domain `www.momentumaicreator.com` is already configured in Vercel.
 ### Go to Vercel Dashboard:
 1. **Vercel Dashboard** → Your Project → **Settings** → **Environment Variables**
 
-### Add These 3 Critical Variables:
+### Add These Critical Variables (Production):
 ```
+# Backend/Server Variables
+NODE_ENV=production
 FRONTEND_URL=https://www.momentumaicreator.com
 API_URL=https://www.momentumaicreator.com
+
+# Frontend Variables
 VITE_APP_URL=https://www.momentumaicreator.com
+VITE_USE_SERVER_AI=true
+VITE_API_URL=https://www.momentumaicreator.com
 ```
 
 ### Verify These Are Also Set:
@@ -24,7 +30,15 @@ VITE_APP_URL=https://www.momentumaicreator.com
 - [ ] `STRIPE_SECRET_KEY`
 - [ ] `STRIPE_WEBHOOK_SECRET`
 - [ ] All Stripe price IDs
-- [ ] `NODE_ENV=production`
+- [ ] `TOKEN_ENCRYPTION_KEY` (64-character hex)
+- [ ] `OAUTH_STATE_SECRET` (64-character hex)
+- [ ] All platform OAuth credentials (if using platform integrations)
+
+**⚠️ CRITICAL:**
+- Set `NODE_ENV=production` (NOT `development`)
+- Remove any localhost entries from production environment variables
+- Set `VITE_USE_SERVER_AI=true` if using server AI
+- Set `VITE_API_URL` to production domain (same origin if API is serverless)
 
 **⚠️ IMPORTANT:** Make sure variables are set for **Production** environment!
 

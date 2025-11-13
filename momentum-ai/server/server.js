@@ -611,10 +611,17 @@ const newsletterRoutes = require('./routes/newsletter');
 
 // Import auth middleware
 const { verifyFirebaseToken } = require('./middleware/auth');
+// Import security rate limiter for AI
+const { aiLimiter } = require('./middleware/security');
+
+// Helper: choose auth/ratelimit for AI endpoints based on FREE_AI_MODE
+const aiPreMiddleware = (process.env.FREE_AI_MODE === 'true')
+  ? [aiLimiter] // Free mode: no auth, but strict rate limiting
+  : [verifyFirebaseToken]; // Default: require auth
 
 // AI API Endpoints
-// Generate content - REQUIRES AUTHENTICATION
-app.post('/api/ai/generate', verifyFirebaseToken, async (req, res) => {
+// Generate content
+app.post('/api/ai/generate', ...aiPreMiddleware, async (req, res) => {
   
   const { prompt, model, temperature, maxTokens, provider } = req.body;
   
@@ -682,8 +689,8 @@ app.post('/api/ai/generate', verifyFirebaseToken, async (req, res) => {
   }
 });
 
-// Generate structured content (JSON) - REQUIRES AUTHENTICATION
-app.post('/api/ai/generate-structured', verifyFirebaseToken, async (req, res) => {
+// Generate structured content (JSON)
+app.post('/api/ai/generate-structured', ...aiPreMiddleware, async (req, res) => {
   
   const { prompt, schema, model, temperature, maxTokens, provider } = req.body;
   
@@ -751,7 +758,7 @@ app.post('/api/ai/generate-structured', verifyFirebaseToken, async (req, res) =>
 });
 
 // Stream content (Server-Sent Events) - REQUIRES AUTHENTICATION
-app.post('/api/ai/stream', verifyFirebaseToken, async (req, res) => {
+app.post('/api/ai/stream', ...aiPreMiddleware, async (req, res) => {
   
   const { prompt, model, temperature, maxTokens, provider, jsonMode } = req.body;
   
@@ -900,7 +907,7 @@ app.post('/api/ai/stream', verifyFirebaseToken, async (req, res) => {
 });
 
 // Analyze image - REQUIRES AUTHENTICATION
-app.post('/api/ai/analyze-image', verifyFirebaseToken, async (req, res) => {
+app.post('/api/ai/analyze-image', ...aiPreMiddleware, async (req, res) => {
   
   const { imageData, prompt } = req.body;
   
