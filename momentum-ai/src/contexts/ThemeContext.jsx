@@ -4,16 +4,16 @@ const themes = {
   cosmic: {
     name: 'Cosmic',
     colors: {
-      primary: 'hsl(200, 100%, 50%)',
-      secondary: 'hsl(280, 85%, 60%)',
-      accent: 'hsl(320, 90%, 55%)',
+      primary: 'hsl(var(--brand-purple))',
+      secondary: 'hsl(var(--brand-cyan))',
+      accent: 'hsl(var(--brand-pink))',
       background: 'hsl(240, 10%, 5%)',
       surface: 'rgba(30, 41, 59, 0.5)',
     },
     gradients: {
-      primary: 'from-[hsl(200,100%,50%)] to-[hsl(280,85%,60%)]',
-      secondary: 'from-[hsl(280,85%,60%)] to-[hsl(320,90%,55%)]',
-      accent: 'from-[hsl(320,90%,55%)] to-[hsl(200,100%,50%)]',
+      primary: 'from-brand-cyan to-brand-purple',
+      secondary: 'from-brand-purple to-brand-pink',
+      accent: 'from-brand-pink to-brand-cyan',
     },
   },
   ocean: {

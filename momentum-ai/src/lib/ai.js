@@ -1,9 +1,15 @@
 /**
  * Unified AI Service - All API calls go through the server
- * This is the recommended way to use AI services
+ * 
+ * @deprecated This hook is deprecated. Use the context-based `useAI` hook from `contexts/AIContext` instead.
+ * This file will route through the context to maintain backward compatibility.
+ * 
+ * Migration: Replace `import { useAI } from '../lib/ai'` with `import { useAI } from '../contexts/AIContext'`
  */
 
 import { useCallback } from 'react';
+import { useContext } from 'react';
+import { AIContext } from '../contexts/AIContext';
 import { aiAPI } from './unifiedAPI';
 import { toast } from 'sonner';
 
@@ -13,9 +19,47 @@ const USE_SERVER_AI = true;
 
 /**
  * Custom hook for AI content generation
- * Provides a simple API compatible with tools that expect useAI() hook
+ * @deprecated Use the context-based `useAI` from `contexts/AIContext` instead
+ * This hook now routes through the context to ensure single behavior path
  */
 export const useAI = () => {
+  // Try to use context-based hook first (preferred)
+  try {
+    const context = useContext(AIContext);
+    if (context) {
+      // Map context methods to legacy API for backward compatibility
+      return {
+        generateContent: async (options = {}) => {
+          if (!options.prompt) {
+            throw new Error('Prompt is required');
+          }
+          return await context.generateContent(options.prompt, options);
+        },
+        generateStructuredContent: async (options = {}) => {
+          if (!options.prompt || !options.schema) {
+            throw new Error('Prompt and schema are required');
+          }
+          return await context.generateStructuredContent(options.prompt, options.schema, options);
+        },
+        streamContent: async (options = {}) => {
+          if (!options.prompt) {
+            throw new Error('Prompt is required');
+          }
+          return await context.streamContent(options.prompt, options.onChunk, options);
+        },
+        isGenerating: context.isGenerating,
+      };
+    }
+  } catch (error) {
+    // Context not available, fall back to direct API calls (legacy behavior)
+    // This should only happen if component is not wrapped in AIProvider
+    if (import.meta.env.DEV) {
+      console.warn('useAI: AIContext not available, falling back to direct API calls. Wrap your app in AIProvider.');
+    }
+  }
+  
+  // Fallback to direct API implementation (for backward compatibility)
+  // This maintains the old behavior but is deprecated
   /**
    * Generate content with AI
    * @param {Object} options - Generation options

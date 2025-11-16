@@ -6,9 +6,9 @@
 // Use relative paths in production (same domain), or VITE_API_URL if explicitly set
 const getApiUrl = () => {
   const envUrl = import.meta.env.VITE_API_URL;
-  // If VITE_API_URL is set and not localhost, use it
+  // If VITE_API_URL is set and not localhost, use it (strip trailing slashes)
   if (envUrl && !envUrl.includes('localhost')) {
-    return envUrl;
+    return envUrl.replace(/\/+$/, '');
   }
   // In production or if VITE_API_URL is localhost, use relative paths (same domain)
   // This works with Vercel serverless functions
@@ -17,15 +17,26 @@ const getApiUrl = () => {
 
 const API_URL = getApiUrl();
 
+// Import global loading indicator (dynamic to avoid circular deps)
+let setGlobalLoading;
+if (typeof window !== 'undefined') {
+  import('../components/ui/GlobalLoadingIndicator').then(module => {
+    setGlobalLoading = module.setLoading;
+  }).catch(() => {
+    // Ignore if module not available
+  });
+}
+
 /**
  * Get Firebase auth token with automatic refresh
  * Handles token expiration and refresh automatically
+ * Returns null if user is not authenticated (instead of throwing)
  */
 async function getAuthToken(forceRefresh = false) {
   const { auth } = await import('../lib/firebase');
   const user = auth.currentUser;
   if (!user) {
-    throw new Error('User not authenticated');
+    return null; // Return null instead of throwing for unauthenticated state
   }
   
   try {
@@ -41,21 +52,71 @@ async function getAuthToken(forceRefresh = false) {
 }
 
 /**
- * Make an API request to the server
+ * Retry configuration for API requests
  */
-async function apiRequest(endpoint, options = {}) {
+const RETRY_CONFIG = {
+  maxRetries: 3,
+  retryDelay: 1000, // Start with 1 second
+  retryableStatuses: [408, 429, 500, 502, 503, 504], // Timeout, rate limit, server errors
+  retryableErrors: ['NetworkError', 'Failed to fetch', 'Network request failed']
+};
+
+/**
+ * Sleep utility for retry delays
+ */
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+/**
+ * Check if error is retryable
+ */
+function isRetryableError(error, status) {
+  if (status && RETRY_CONFIG.retryableStatuses.includes(status)) {
+    return true;
+  }
+  if (error && RETRY_CONFIG.retryableErrors.some(msg => error.message?.includes(msg))) {
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Make an API request to the server with retry logic
+ */
+async function apiRequest(endpoint, options = {}, retryCount = 0) {
   // Get auth token if user is authenticated
+  // getAuthToken now returns null for unauthenticated users instead of throwing
   let token = null;
   try {
-    token = await getAuthToken().catch(() => null);
+    token = await getAuthToken();
+    // token is null if user is not authenticated - this is expected and handled below
   } catch (error) {
-    // If token retrieval fails and it's an auth error, don't include token
-    if (!error.message.includes('authenticated')) {
-      throw error;
-    }
+    // Only real token errors (expired, disabled) should throw
+    // These indicate actual authentication problems, not just "no user logged in"
+    throw error;
   }
   
-  const url = endpoint.startsWith('http') ? endpoint : `${API_URL}${endpoint}`;
+  // Normalize endpoint:
+  // - Absolute URLs are used as-is
+  // - If endpoint is relative and does NOT start with /api, prefix it with /api
+  // - Ensure there is exactly one slash between base and endpoint
+  let normalizedEndpoint = endpoint;
+  if (!/^https?:\/\//i.test(normalizedEndpoint)) {
+    // Ensure leading slash
+    if (!normalizedEndpoint.startsWith('/')) {
+      normalizedEndpoint = '/' + normalizedEndpoint;
+    }
+    // Auto-prefix /api for client calls like unifiedAPI.get('/platforms/connected')
+    if (!normalizedEndpoint.startsWith('/api/')) {
+      normalizedEndpoint = '/api' + normalizedEndpoint;
+    }
+  }
+
+  const base = API_URL || '';
+  const url = /^https?:\/\//i.test(normalizedEndpoint)
+    ? normalizedEndpoint
+    : (base ? `${base.replace(/\/+$/, '')}/${normalizedEndpoint.replace(/^\/+/, '')}` : normalizedEndpoint);
   
   const headers = {
     'Content-Type': 'application/json',
@@ -63,40 +124,108 @@ async function apiRequest(endpoint, options = {}) {
     ...options.headers,
   };
 
-  let response = await fetch(url, {
-    ...options,
-    headers,
-  });
+  let response;
+  let lastError;
 
-  // Handle 401 Unauthorized - token might be expired
-  if (response.status === 401 && token) {
-    try {
-      // Try refreshing token once
-      token = await getAuthToken(true);
-      headers['Authorization'] = `Bearer ${token}`;
-      response = await fetch(url, {
-        ...options,
-        headers,
-      });
-    } catch (refreshError) {
-      // If refresh fails, redirect to login for protected endpoints
-      if (refreshError.message.includes('expired') || refreshError.message.includes('authenticated')) {
-        if (typeof window !== 'undefined') {
-          window.location.href = '/auth/signin?redirect=' + encodeURIComponent(window.location.pathname);
+  // Set global loading state
+  if (setGlobalLoading) {
+    setGlobalLoading(true);
+  }
+
+  try {
+    response = await fetch(url, {
+      ...options,
+      headers,
+      signal: options.signal, // Support AbortController
+    });
+
+    // Handle 401 Unauthorized - token might be expired
+    if (response.status === 401 && token) {
+      try {
+        // Try refreshing token once
+        token = await getAuthToken(true);
+        headers['Authorization'] = `Bearer ${token}`;
+        response = await fetch(url, {
+          ...options,
+          headers,
+          signal: options.signal,
+        });
+      } catch (refreshError) {
+        // If refresh fails, redirect to login for protected endpoints
+        if (refreshError.message.includes('expired') || refreshError.message.includes('authenticated')) {
+          if (typeof window !== 'undefined') {
+            window.location.href = '/auth/signin?redirect=' + encodeURIComponent(window.location.pathname);
+          }
         }
+        throw refreshError;
       }
-      throw refreshError;
+    }
+
+    // Retry on retryable status codes
+    if (!response.ok && isRetryableError(null, response.status) && retryCount < RETRY_CONFIG.maxRetries) {
+      const delay = RETRY_CONFIG.retryDelay * Math.pow(2, retryCount); // Exponential backoff
+      await sleep(delay);
+      return apiRequest(endpoint, options, retryCount + 1);
+    }
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ error: 'Request failed' }));
+      // Provide user-friendly error messages
+      let errorMessage = error.message || error.error || `Request failed: ${response.statusText}`;
+      
+      // Map common HTTP status codes to user-friendly messages
+      const statusMessages = {
+        400: 'Invalid request. Please check your input and try again.',
+        401: 'Your session has expired. Please sign in again.',
+        403: 'You don\'t have permission to perform this action.',
+        404: 'The requested resource was not found.',
+        408: 'Request timed out. Please try again.',
+        429: 'Too many requests. Please wait a moment and try again.',
+        500: 'Server error. Our team has been notified. Please try again in a moment.',
+        502: 'Service temporarily unavailable. Please try again in a moment.',
+        503: 'Service is currently unavailable. Please try again later.',
+        504: 'Request timed out. Please try again.',
+      };
+      
+      if (statusMessages[response.status]) {
+        errorMessage = statusMessages[response.status];
+      }
+      
+      const apiError = new Error(errorMessage);
+      apiError.status = response.status;
+      apiError.code = error.code;
+      throw apiError;
+    }
+
+    return response;
+  } catch (error) {
+    // Handle network errors and retry
+    if (isRetryableError(error) && retryCount < RETRY_CONFIG.maxRetries) {
+      const delay = RETRY_CONFIG.retryDelay * Math.pow(2, retryCount);
+      await sleep(delay);
+      return apiRequest(endpoint, options, retryCount + 1);
+    }
+    
+    // Don't expose sensitive error details
+    if (error.name === 'AbortError') {
+      throw error; // Let abort errors pass through
+    }
+    
+    // Provide user-friendly error message
+    let userMessage = 'Network error. Please check your connection and try again.';
+    if (error.message && !error.message.includes('fetch')) {
+      userMessage = error.message;
+    }
+    
+    const apiError = new Error(userMessage);
+    apiError.originalError = error;
+    throw apiError;
+  } finally {
+    // Clear global loading state
+    if (setGlobalLoading) {
+      setGlobalLoading(false);
     }
   }
-
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({ error: 'Request failed' }));
-    // Don't expose sensitive error details
-    const errorMessage = error.message || error.error || `Request failed: ${response.statusText}`;
-    throw new Error(errorMessage);
-  }
-
-  return response;
 }
 
 /**

@@ -50,7 +50,7 @@ class ImageGenerationService {
 
     // Validate reference image URL if provided
     if (referenceImage) {
-      const urlValidation = validateUrl(referenceImage, true);
+      const urlValidation = await validateUrl(referenceImage, true);
       if (!urlValidation.valid) {
         throw new Error(`Invalid reference image URL: ${urlValidation.error}`);
       }

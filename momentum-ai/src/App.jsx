@@ -20,6 +20,8 @@ import AIConfigBanner from './components/AIConfigBanner';
 import { ConfigHealthBanner } from './components/ui/ConfigHealthBanner';
 import { useAI } from './contexts/AIContext';
 import OnboardingWizard from './components/onboarding/OnboardingWizard';
+import GlobalLoadingIndicator from './components/ui/GlobalLoadingIndicator';
+import ConnectionStatus from './components/ConnectionStatus';
 
 // Page transition variants
 const pageVariants = {
@@ -270,6 +272,10 @@ function AppContent() {
   return (
     <ErrorBoundary>
       <div className="app-container relative">
+        {/* Global Loading Indicator */}
+        <GlobalLoadingIndicator />
+        {/* Connection Status */}
+        <ConnectionStatus />
         {/* Configuration Health Banner */}
         <ConfigHealthBanner />
         {/* AI Configuration Banner */}

@@ -87,17 +87,33 @@ export default function Referrals() {
       return;
     }
 
+    // Basic email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(emailInvite.trim())) {
+      toast({
+        title: "Error",
+        description: "Please enter a valid email address",
+        variant: "destructive",
+      });
+      return;
+    }
+
     try {
-      // TODO: Implement email invitation
+      const { unifiedAPI } = await import('../../lib/unifiedAPI');
+      await unifiedAPI.post('/referrals/invite', {
+        email: emailInvite.trim(),
+      });
+      
       toast({
         title: "Success",
         description: `Invitation sent to ${emailInvite}`,
       });
       setEmailInvite('');
     } catch (error) {
+      console.error('Failed to send referral invitation:', error);
       toast({
         title: "Error",
-        description: "Failed to send invitation",
+        description: error.message || "Failed to send invitation",
         variant: "destructive",
       });
     }

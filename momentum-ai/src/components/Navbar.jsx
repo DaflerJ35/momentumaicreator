@@ -106,7 +106,7 @@ function Navbar({ user, onAuthClick, onMenuToggle }) {
                   exit={{ opacity: 0, rotate: 180 }}
                   transition={{ duration: 0.2 }}
                 >
-                  <Sun className="w-5 h-5 text-[hsl(200,100%,50%)]" />
+                  <Sun className="w-5 h-5 text-[hsl(var(--brand-cyan))]" />
                 </motion.div>
               ) : (
                 <motion.div
@@ -154,7 +154,7 @@ function Navbar({ user, onAuthClick, onMenuToggle }) {
               onClick={onAuthClick}
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
-              className="px-4 py-2 bg-gradient-to-r from-[hsl(200,100%,50%)] to-[hsl(280,85%,60%)] hover:from-[hsl(280,85%,60%)] hover:to-[hsl(320,90%,55%)] text-white rounded-lg font-medium shadow-lg hover:shadow-xl hover:shadow-[hsl(200,100%,50%)]/50 transition-all"
+              className="px-4 py-2 bg-gradient-to-r from-brand-cyan to-brand-purple hover:from-brand-purple hover:to-brand-pink text-white rounded-lg font-medium shadow-lg hover:shadow-xl hover:shadow-[hsl(var(--brand-cyan))]/50 transition-all"
             >
               <User className="w-4 h-4 inline mr-2" />
               Sign In

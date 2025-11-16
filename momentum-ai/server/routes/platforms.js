@@ -12,6 +12,7 @@ const {
   storeOAuthState, 
   retrieveOAuthState 
 } = require('../utils/oauthState');
+const oauthService = require('../services/oauthService');
 
 // Platform OAuth and API integrations
 // This handles ALL platforms: OnlyFans, Fansly, Fanvue, Fanplace, Instagram, Twitter, etc.
@@ -44,7 +45,7 @@ router.get('/:platformId/oauth/init', verifyFirebaseToken, async (req, res) => {
     });
     
     // Generate OAuth URL with state_id and code_challenge
-    const oauthUrl = await getOAuthUrl(platformId, userId, stateId, pkce?.codeChallenge);
+    const oauthUrl = await oauthService.getOAuthUrl(platformId, userId, stateId, pkce?.codeChallenge);
     
     res.json({
       success: true,
@@ -131,7 +132,7 @@ router.get('/:platformId/oauth/callback', async (req, res) => {
     logger.info(`OAuth callback for platform: ${platformId}, user: ${userId}`, { correlationId });
     
     // Exchange code for access token (pass code_verifier if available)
-    const tokens = await exchangeOAuthCode(platformId, code, stateData.codeVerifier, correlationId);
+    const tokens = await oauthService.exchangeOAuthCode(platformId, code, stateData.codeVerifier, correlationId);
     
     // Store tokens securely
     await platformService.storePlatformTokens(userId, platformId, tokens);
@@ -156,6 +157,11 @@ router.get('/:platformId/oauth/callback', async (req, res) => {
  * Get connected platforms for user
  * GET /api/platforms/connected
  */
+// Explicit preflight handler to ensure CORS preflight doesn't hit auth or redirects
+router.options('/connected', (req, res) => {
+  // Global CORS middleware already sets the appropriate headers
+  return res.sendStatus(204);
+});
 router.get('/connected', verifyFirebaseToken, async (req, res) => {
   try {
     const userId = req.user.uid;
@@ -357,6 +363,30 @@ router.get('/scheduled', verifyFirebaseToken, async (req, res) => {
 });
 
 /**
+ * Delete scheduled post
+ * DELETE /api/platforms/scheduled/:postId
+ */
+router.delete('/scheduled/:postId', verifyFirebaseToken, async (req, res) => {
+  try {
+    const userId = req.user.uid;
+    const { postId } = req.params;
+    
+    await platformService.deleteScheduledPost(userId, postId);
+    
+    res.json({
+      success: true,
+      message: 'Scheduled post deleted',
+    });
+  } catch (error) {
+    logger.error(`Delete scheduled post error: ${error.message}`);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to delete scheduled post',
+    });
+  }
+});
+
+/**
  * Get platform analytics
  * GET /api/platforms/:platformId/analytics
  */
@@ -384,266 +414,6 @@ router.get('/:platformId/analytics', verifyFirebaseToken, async (req, res) => {
   }
 });
 
-// Helper functions
-
-async function getOAuthUrl(platformId, userId, stateId, codeChallenge) {
-  // Platform-specific OAuth URLs
-  const oauthConfigs = {
-    instagram: {
-      url: 'https://www.facebook.com/v18.0/dialog/oauth',
-      clientId: process.env.FACEBOOK_APP_ID,
-      redirectUri: `${process.env.API_URL || 'http://localhost:3001'}/api/platforms/instagram/oauth/callback`,
-      scope: 'instagram_basic,pages_show_list,instagram_content_publish,pages_read_engagement',
-    },
-    twitter: {
-      url: 'https://twitter.com/i/oauth2/authorize',
-      clientId: process.env.TWITTER_CLIENT_ID,
-      redirectUri: `${process.env.API_URL || 'http://localhost:3001'}/api/platforms/twitter/oauth/callback`,
-      scope: 'tweet.read tweet.write users.read offline.access',
-    },
-    youtube: {
-      url: 'https://accounts.google.com/o/oauth2/v2/auth',
-      clientId: process.env.GOOGLE_CLIENT_ID,
-      redirectUri: `${process.env.API_URL || 'http://localhost:3001'}/api/platforms/youtube/oauth/callback`,
-      scope: 'https://www.googleapis.com/auth/youtube.upload https://www.googleapis.com/auth/youtube',
-    },
-    linkedin: {
-      url: 'https://www.linkedin.com/oauth/v2/authorization',
-      clientId: process.env.LINKEDIN_CLIENT_ID,
-      redirectUri: `${process.env.API_URL || 'http://localhost:3001'}/api/platforms/linkedin/oauth/callback`,
-      scope: 'r_liteprofile r_emailaddress w_member_social',
-    },
-    facebook: {
-      url: 'https://www.facebook.com/v18.0/dialog/oauth',
-      clientId: process.env.FACEBOOK_APP_ID,
-      redirectUri: `${process.env.API_URL || 'http://localhost:3001'}/api/platforms/facebook/oauth/callback`,
-      scope: 'pages_manage_posts,pages_read_engagement',
-    },
-    tiktok: {
-      url: 'https://www.tiktok.com/v2/auth/authorize',
-      clientId: process.env.TIKTOK_CLIENT_KEY,
-      redirectUri: `${process.env.API_URL || 'http://localhost:3001'}/api/platforms/tiktok/oauth/callback`,
-      scope: 'user.info.basic,video.upload',
-    },
-    // Subscription platforms (custom OAuth flows)
-    onlyfans: {
-      url: `${process.env.API_URL || 'http://localhost:3001'}/api/platforms/onlyfans/oauth/init`,
-      // OnlyFans uses custom API authentication
-    },
-    fansly: {
-      url: `${process.env.API_URL || 'http://localhost:3001'}/api/platforms/fansly/oauth/init`,
-    },
-    fanvue: {
-      url: `${process.env.API_URL || 'http://localhost:3001'}/api/platforms/fanvue/oauth/init`,
-    },
-    fanplace: {
-      url: `${process.env.API_URL || 'http://localhost:3001'}/api/platforms/fanplace/oauth/init`,
-    },
-  };
-  
-  const config = oauthConfigs[platformId];
-  if (!config) {
-    throw new Error(`OAuth not configured for platform: ${platformId}`);
-  }
-  
-  const params = new URLSearchParams({
-    client_id: config.clientId,
-    redirect_uri: config.redirectUri,
-    response_type: 'code',
-    scope: config.scope || '',
-    state: stateId,
-  });
-  
-  // Add PKCE params if code_challenge provided
-  if (codeChallenge) {
-    params.append('code_challenge', codeChallenge);
-    params.append('code_challenge_method', 'S256');
-  }
-  
-  return `${config.url}?${params.toString()}`;
-}
-
-async function exchangeOAuthCode(platformId, code, codeVerifier, correlationId) {
-  logger.info(`Exchanging OAuth code for ${platformId}`, { correlationId });
-  
-  const axios = require('axios');
-  const redirectUri = `${process.env.API_URL || 'http://localhost:3001'}/api/platforms/${platformId}/oauth/callback`;
-  
-  try {
-    switch (platformId) {
-      case 'instagram': {
-        // Exchange code for Facebook access token
-        const tokenResponse = await axios.get('https://graph.facebook.com/v18.0/oauth/access_token', {
-          params: {
-            client_id: process.env.FACEBOOK_APP_ID,
-            client_secret: process.env.FACEBOOK_APP_SECRET,
-            redirect_uri: redirectUri,
-            code,
-          },
-        });
-        
-        const userAccessToken = tokenResponse.data.access_token;
-        
-        // Fetch user's pages to get Page access token and Instagram Business Account ID
-        const pagesResponse = await axios.get('https://graph.facebook.com/v18.0/me/accounts', {
-          params: {
-            access_token: userAccessToken,
-            fields: 'access_token,instagram_business_account',
-          },
-        });
-        
-        // Find page with Instagram Business Account
-        const pageWithIG = pagesResponse.data.data.find(page => page.instagram_business_account);
-        if (!pageWithIG || !pageWithIG.instagram_business_account) {
-          throw new Error('No Instagram Business Account found. Please connect a Facebook Page with an Instagram Business Account.');
-        }
-        
-        const pageAccessToken = pageWithIG.access_token;
-        const igUserId = pageWithIG.instagram_business_account.id;
-        
-        // Get token expiry (Facebook tokens typically last 60 days)
-        const expiresIn = tokenResponse.data.expires_in || (60 * 24 * 60 * 60); // Default 60 days in seconds
-        
-        return {
-          accessToken: userAccessToken,
-          pageAccessToken: pageAccessToken,
-          igUserId: igUserId,
-          expiresAt: Date.now() + (expiresIn * 1000),
-          scope: tokenResponse.data.scope || 'instagram_basic,pages_show_list,instagram_content_publish,pages_read_engagement',
-        };
-      }
-      
-      case 'twitter': {
-        // Twitter OAuth 2.0 with PKCE - no Basic auth, use client_id in body
-        const response = await axios.post(
-          'https://api.twitter.com/2/oauth2/token',
-          new URLSearchParams({
-            code,
-            grant_type: 'authorization_code',
-            client_id: process.env.TWITTER_CLIENT_ID,
-            redirect_uri: redirectUri,
-            code_verifier: codeVerifier,
-          }),
-          {
-            headers: {
-              'Content-Type': 'application/x-www-form-urlencoded',
-            },
-          }
-        );
-        
-        return {
-          accessToken: response.data.access_token,
-          refreshToken: response.data.refresh_token,
-          expiresAt: Date.now() + (response.data.expires_in * 1000),
-          scope: response.data.scope,
-        };
-      }
-      
-      case 'linkedin': {
-        const response = await axios.post(
-          'https://www.linkedin.com/oauth/v2/accessToken',
-          new URLSearchParams({
-            grant_type: 'authorization_code',
-            code,
-            redirect_uri: redirectUri,
-            client_id: process.env.LINKEDIN_CLIENT_ID,
-            client_secret: process.env.LINKEDIN_CLIENT_SECRET,
-            code_verifier: codeVerifier,
-          }),
-          {
-            headers: {
-              'Content-Type': 'application/x-www-form-urlencoded',
-            },
-          }
-        );
-        
-        return {
-          accessToken: response.data.access_token,
-          refreshToken: response.data.refresh_token,
-          expiresAt: Date.now() + (response.data.expires_in * 1000),
-          scope: response.data.scope,
-        };
-      }
-      
-      case 'facebook': {
-        const response = await axios.get('https://graph.facebook.com/v18.0/oauth/access_token', {
-          params: {
-            client_id: process.env.FACEBOOK_APP_ID,
-            client_secret: process.env.FACEBOOK_APP_SECRET,
-            redirect_uri: redirectUri,
-            code,
-          },
-        });
-        
-        return {
-          accessToken: response.data.access_token,
-          expiresAt: Date.now() + (response.data.expires_in * 1000),
-        };
-      }
-      
-      case 'youtube': {
-        const response = await axios.post(
-          'https://oauth2.googleapis.com/token',
-          new URLSearchParams({
-            client_id: process.env.GOOGLE_CLIENT_ID,
-            client_secret: process.env.GOOGLE_CLIENT_SECRET,
-            code,
-            grant_type: 'authorization_code',
-            redirect_uri: redirectUri,
-          }),
-          {
-            headers: {
-              'Content-Type': 'application/x-www-form-urlencoded',
-            },
-          }
-        );
-        
-        return {
-          accessToken: response.data.access_token,
-          refreshToken: response.data.refresh_token,
-          expiresAt: Date.now() + (response.data.expires_in * 1000),
-          scope: response.data.scope,
-        };
-      }
-      
-      case 'tiktok': {
-        const response = await axios.post(
-          'https://open.tiktokapis.com/v2/oauth/token/',
-          new URLSearchParams({
-            client_key: process.env.TIKTOK_CLIENT_KEY,
-            client_secret: process.env.TIKTOK_CLIENT_SECRET,
-            code,
-            grant_type: 'authorization_code',
-            redirect_uri: redirectUri,
-            code_verifier: codeVerifier,
-          }),
-          {
-            headers: {
-              'Content-Type': 'application/x-www-form-urlencoded',
-            },
-          }
-        );
-        
-        return {
-          accessToken: response.data.data.access_token,
-          refreshToken: response.data.data.refresh_token,
-          expiresAt: Date.now() + (response.data.data.expires_in * 1000),
-          scope: response.data.data.scope,
-        };
-      }
-      
-      // Add more platform OAuth exchanges here
-      default:
-        logger.error(`OAuth exchange not implemented for ${platformId}`, { correlationId });
-        throw new Error(`OAuth exchange not yet implemented for platform: ${platformId}. This platform is coming soon.`);
-    }
-  } catch (error) {
-    logger.error(`OAuth token exchange error for ${platformId}: ${error.message}`, { 
-      correlationId,
-      error: error.response?.data || error.stack 
-    });
-    throw error;
-  }
-}
+// OAuth helper functions moved to oauthService.js
 
 module.exports = router;

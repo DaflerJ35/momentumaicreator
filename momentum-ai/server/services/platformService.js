@@ -350,6 +350,29 @@ async function updateScheduledPostStatus(userId, postId, status, result = null) 
 }
 
 /**
+ * Delete scheduled post
+ */
+async function deleteScheduledPost(userId, postId) {
+  try {
+    const db = getDatabase();
+    const postRef = db.ref(`users/${userId}/scheduledPosts/${postId}`);
+    
+    // Verify post exists and belongs to user
+    const snapshot = await postRef.once('value');
+    if (!snapshot.exists()) {
+      throw new Error('Scheduled post not found');
+    }
+    
+    await postRef.remove();
+    logger.info(`Deleted scheduled post ${postId} for user: ${userId}`);
+    return true;
+  } catch (error) {
+    logger.error(`Error deleting scheduled post: ${error.message}`);
+    throw error;
+  }
+}
+
+/**
  * Store post analytics
  */
 async function storePostAnalytics(userId, platformId, postId, analytics) {
@@ -433,6 +456,7 @@ module.exports = {
   storeScheduledPost,
   getScheduledPosts,
   updateScheduledPostStatus,
+  deleteScheduledPost,
   storePostAnalytics,
   getPlatformAnalytics,
 };

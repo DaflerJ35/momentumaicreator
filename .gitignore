@@ -5,20 +5,29 @@ server/.env
 momentum-ai/.env
 momentum-ai/server/.env
 
+# Vercel local state
+.vercel/
+
 # Firebase cache
 .firebase/
 
 # Dependencies
 node_modules/
+momentum-ai/node_modules/
 
 # Build output
 dist/
 build/
+momentum-ai/dist/
+momentum-ai/.vite/
+**/.vite/
 
 # Logs
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+momentum-ai/server/logs/
+*.log
 
 # Editor directories and files
 .vscode/*

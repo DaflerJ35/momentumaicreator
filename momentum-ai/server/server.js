@@ -12,11 +12,15 @@ const fs = require('fs');
 // Import security middleware and logger (must be before Stripe initialization)
 const { securityHeaders, apiLimiter, createRateLimiter } = require('./middleware/security');
 const logger = require('./utils/logger');
+const admin = require('./firebaseAdmin');
 
-// Create logs directory if it doesn't exist
+// Create logs directory if it doesn't exist (skip on serverless like Vercel)
+const isServerless = !!process.env.VERCEL || !!process.env.AWS_REGION;
 const logsDir = path.join(__dirname, 'logs');
-if (!fs.existsSync(logsDir)) {
-  fs.mkdirSync(logsDir, { recursive: true });
+if (!isServerless) {
+  if (!fs.existsSync(logsDir)) {
+    fs.mkdirSync(logsDir, { recursive: true });
+  }
 }
 
 const app = express();
@@ -56,17 +60,30 @@ const { corsOptions } = require('./middleware/security');
  * - Wildcards are allowed in development but not recommended
  */
 const parseOrigins = (envOrigins) => {
-  if (!envOrigins) {
-    // Development defaults
-    return ['http://localhost:5173', 'http://localhost:3000'];
+  const origins = [];
+  
+  // Always include Vercel URLs if in Vercel environment
+  if (process.env.VERCEL_URL) {
+    origins.push(`https://${process.env.VERCEL_URL}`);
+  }
+  if (process.env.VERCEL) {
+    // Include common Vercel preview/production patterns
+    origins.push('https://*.vercel.app');
+    origins.push('https://*.vercel.app/*');
   }
   
-  // Parse comma-separated origins and trim whitespace
-  const origins = envOrigins.split(',').map(origin => origin.trim());
+  if (envOrigins) {
+    // Parse comma-separated origins and trim whitespace
+    const parsed = envOrigins.split(',').map(origin => origin.trim());
+    origins.push(...parsed);
+  } else if (!isProduction) {
+    // Development defaults
+    origins.push('http://localhost:5173', 'http://localhost:3000');
+  }
   
-  // In production, avoid wildcards
+  // In production, avoid wildcards (except for Vercel)
   if (isProduction) {
-    const hasWildcard = origins.some(origin => origin.includes('*'));
+    const hasWildcard = origins.some(origin => origin.includes('*') && !origin.includes('vercel.app'));
     if (hasWildcard) {
       logger.warn('Wildcard origins detected in production. This is a security risk.');
     }
@@ -86,12 +103,41 @@ const enhancedCorsOptions = {
       return callback(null, true);
     }
     
+    // Check exact match first
     if (allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      logger.warn(`CORS blocked request from origin: ${origin}`);
-      callback(new Error('Not allowed by CORS'));
+      return callback(null, true);
     }
+    
+    // Check Vercel wildcard patterns
+    if (process.env.VERCEL && origin) {
+      try {
+        const url = new URL(origin);
+        // Allow any *.vercel.app subdomain
+        if (url.hostname.endsWith('.vercel.app')) {
+          return callback(null, true);
+        }
+      } catch (e) {
+        // Invalid URL, continue to rejection
+      }
+    }
+    
+    // Check if origin matches any pattern (for wildcards)
+    const matchesPattern = allowedOrigins.some(pattern => {
+      if (pattern.includes('*')) {
+        const regex = new RegExp('^' + pattern.replace(/\*/g, '.*') + '$');
+        return regex.test(origin);
+      }
+      return false;
+    });
+    
+    if (matchesPattern) {
+      return callback(null, true);
+    }
+    
+    logger.warn(`CORS blocked request from origin: ${origin}`, { 
+      allowedOrigins: allowedOrigins.slice(0, 3) // Log first 3 for debugging
+    });
+    callback(new Error('Not allowed by CORS'));
   }
 };
 
@@ -185,7 +231,45 @@ app.post('/api/webhook', webhookLimiter, express.raw({ type: 'application/json' 
           customerEmail: session.customer_email,
           amount: session.amount_total
         });
-        // TODO: Update user subscription status in database
+        // Persist subscription state in Firestore keyed by user ID from metadata
+        try {
+          const userId = session.metadata?.userId || session.metadata?.user_id || session.client_reference_id;
+          if (userId) {
+            let subData = {
+              status: 'completed',
+              plan: session.metadata?.plan || null,
+              updated_at: new Date().toISOString(),
+              customer: session.customer || null,
+              session_id: session.id
+            };
+            // If subscription id is present, fetch details
+            if (session.subscription) {
+              try {
+                const sub = await stripe.subscriptions.retrieve(session.subscription);
+                subData = {
+                  ...subData,
+                  status: sub.status,
+                  current_period_end: sub.current_period_end ? new Date(sub.current_period_end * 1000).toISOString() : null,
+                  canceled_at: sub.canceled_at ? new Date(sub.canceled_at * 1000).toISOString() : null,
+                  subscription_id: sub.id,
+                  plan: sub.items?.data?.[0]?.price?.id || sub.items?.data?.[0]?.price?.nickname || subData.plan || null
+                };
+              } catch (e) {
+                logger.warn('Unable to fetch subscription for checkout.session.completed', { error: e.message });
+              }
+            }
+            try {
+              await admin.firestore().collection('subscriptions').doc(userId).set(subData, { merge: true });
+              logger.info('Subscription state persisted (checkout.session.completed)', { userId });
+            } catch (e) {
+              logger.error('Failed to persist subscription state', { error: e.message });
+            }
+          } else {
+            logger.warn('No userId metadata on checkout.session.completed; skipping subscription persistence');
+          }
+        } catch (e) {
+          logger.error('Error during subscription persistence for checkout.session.completed', { error: e.message });
+        }
         break;
       case 'invoice.payment_succeeded':
         const invoice = event.data.object;
@@ -194,7 +278,35 @@ app.post('/api/webhook', webhookLimiter, express.raw({ type: 'application/json' 
           customer: invoice.customer,
           amount: invoice.amount_paid
         });
-        // TODO: Update subscription status in database
+        // Update subscription status in Firestore if we can infer userId from metadata
+        try {
+          const userId = invoice.metadata?.userId || invoice.metadata?.user_id;
+          if (userId) {
+            const subId = invoice.subscription || null;
+            const subData = {
+              status: 'active',
+              updated_at: new Date().toISOString(),
+              customer: invoice.customer || null,
+              subscription_id: subId
+            };
+            // Try to get current period end from subscription
+            if (subId) {
+              try {
+                const sub = await stripe.subscriptions.retrieve(subId);
+                subData.status = sub.status || subData.status;
+                subData.current_period_end = sub.current_period_end ? new Date(sub.current_period_end * 1000).toISOString() : null;
+                subData.canceled_at = sub.canceled_at ? new Date(sub.canceled_at * 1000).toISOString() : null;
+                subData.plan = sub.items?.data?.[0]?.price?.id || null;
+              } catch (e) {
+                logger.warn('Unable to fetch subscription for invoice.payment_succeeded', { error: e.message });
+              }
+            }
+            await admin.firestore().collection('subscriptions').doc(userId).set(subData, { merge: true });
+            logger.info('Subscription state persisted (invoice.payment_succeeded)', { userId });
+          }
+        } catch (e) {
+          logger.error('Failed to persist subscription state on invoice.payment_succeeded', { error: e.message });
+        }
         break;
       case 'customer.subscription.updated':
         const subscription = event.data.object;
@@ -203,7 +315,27 @@ app.post('/api/webhook', webhookLimiter, express.raw({ type: 'application/json' 
           status: subscription.status,
           customer: subscription.customer
         });
-        // TODO: Update subscription status in database
+        // Persist subscription status using userId from metadata if present
+        try {
+          const userId = subscription.metadata?.userId || subscription.metadata?.user_id;
+          if (userId) {
+            const subData = {
+              status: subscription.status,
+              plan: subscription.items?.data?.[0]?.price?.id || subscription.items?.data?.[0]?.price?.nickname || null,
+              current_period_end: subscription.current_period_end ? new Date(subscription.current_period_end * 1000).toISOString() : null,
+              canceled_at: subscription.canceled_at ? new Date(subscription.canceled_at * 1000).toISOString() : null,
+              updated_at: new Date().toISOString(),
+              customer: subscription.customer || null,
+              subscription_id: subscription.id
+            };
+            await admin.firestore().collection('subscriptions').doc(userId).set(subData, { merge: true });
+            logger.info('Subscription state persisted (customer.subscription.updated)', { userId });
+          } else {
+            logger.warn('No userId metadata on customer.subscription.updated; skipping subscription persistence');
+          }
+        } catch (e) {
+          logger.error('Failed to persist subscription state on customer.subscription.updated', { error: e.message });
+        }
         break;
       case 'customer.subscription.deleted':
         const deletedSubscription = event.data.object;
@@ -211,7 +343,24 @@ app.post('/api/webhook', webhookLimiter, express.raw({ type: 'application/json' 
           subscriptionId: deletedSubscription.id,
           customer: deletedSubscription.customer
         });
-        // TODO: Update subscription status in database (cancel subscription)
+        // Mark subscription as canceled in Firestore
+        try {
+          const userId = deletedSubscription.metadata?.userId || deletedSubscription.metadata?.user_id;
+          if (userId) {
+            await admin.firestore().collection('subscriptions').doc(userId).set({
+              status: 'canceled',
+              canceled_at: deletedSubscription.canceled_at ? new Date(deletedSubscription.canceled_at * 1000).toISOString() : new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+              subscription_id: deletedSubscription.id,
+              customer: deletedSubscription.customer || null
+            }, { merge: true });
+            logger.info('Subscription state persisted (customer.subscription.deleted)', { userId });
+          } else {
+            logger.warn('No userId metadata on customer.subscription.deleted; skipping subscription persistence');
+          }
+        } catch (e) {
+          logger.error('Failed to persist subscription state on customer.subscription.deleted', { error: e.message });
+        }
         break;
       default:
         logger.debug(`Unhandled webhook event type: ${event.type}`, { eventId: event.id });
@@ -261,6 +410,33 @@ app.use((req, res, next) => {
   res.setHeader('X-XSS-Protection', '1; mode=block');
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
   next();
+});
+
+// Cron-triggered scheduler endpoint (for serverless environments)
+// Configure a Vercel Cron job to POST this endpoint with header X-Cron-Secret
+app.post('/api/scheduler/run', async (req, res) => {
+  try {
+    const cronSecret = process.env.CRON_SECRET;
+    if (!cronSecret) {
+      logger.warn('CRON_SECRET not set; refusing to run scheduler endpoint');
+      return res.status(503).json({ error: 'Scheduler not configured' });
+    }
+
+    const provided = req.headers['x-cron-secret'] || req.headers['x-cronkey'] || req.query.secret;
+    if (provided !== cronSecret) {
+      logger.warn('Unauthorized scheduler run attempt');
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const { processScheduledPosts } = require('./services/schedulerService');
+    logger.info('Scheduler run invoked via /api/scheduler/run');
+    await processScheduledPosts();
+    logger.info('Scheduler run completed');
+    return res.json({ ok: true });
+  } catch (error) {
+    logger.error('Scheduler run failed', { error: error.message, stack: error.stack });
+    return res.status(500).json({ error: 'Scheduler run failed' });
+  }
 });
 
 // Cache for free product/price IDs (created once, reused)
@@ -595,8 +771,31 @@ app.post('/api/create-checkout-session', async (req, res) => {
 // Webhook handler has been moved above express.json() middleware
 
 // Health check endpoint
+// Enhanced health check endpoint with diagnostics
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  const health = {
+    status: 'ok',
+    timestamp: new Date().toISOString(),
+    environment: {
+      nodeEnv: process.env.NODE_ENV || 'not set',
+      vercel: !!process.env.VERCEL,
+      vercelUrl: process.env.VERCEL_URL || 'not set',
+      region: process.env.VERCEL_REGION || 'not set'
+    },
+    services: {
+      firebase: !!admin.apps.length,
+      aiProvider: process.env.AI_PROVIDER || 'not set',
+      aiConfigured: !!(process.env.GEMINI_API_KEY || process.env.OPENAI_API_KEY || process.env.OLLAMA_API_URL),
+      stripe: !!stripe
+    },
+    memory: {
+      used: Math.round(process.memoryUsage().heapUsed / 1024 / 1024),
+      total: Math.round(process.memoryUsage().heapTotal / 1024 / 1024),
+      limit: process.env.VERCEL ? '3008 MB (Vercel)' : 'unlimited'
+    }
+  };
+  
+  res.json(health);
 });
 
 // AI Service - Import AI service
@@ -608,6 +807,8 @@ const multimediaRoutes = require('./routes/multimedia');
 const platformRoutes = require('./routes/platforms');
 const blogRoutes = require('./routes/blog');
 const newsletterRoutes = require('./routes/newsletter');
+const analyticsRoutes = require('./routes/analytics');
+const referralRoutes = require('./routes/referrals');
 
 // Import auth middleware
 const { verifyFirebaseToken } = require('./middleware/auth');
@@ -669,14 +870,51 @@ app.post('/api/ai/generate', ...aiPreMiddleware, async (req, res) => {
       return res.status(400).json({ error: 'Invalid model' });
     }
 
-    const response = await aiService.generateContent(sanitizedPrompt, {
-      model: model || undefined,
-      temperature: temperature !== undefined ? parseFloat(temperature) : undefined,
-      maxTokens: maxTokens !== undefined ? parseInt(maxTokens) : undefined,
-      provider: provider || undefined
-    });
+    // Setup abort/timeout to cancel upstream AI call if client disconnects or it runs too long
+    const abortController = new AbortController();
+    const ROUTE_TIMEOUT_MS = 60000; // 60s safety timeout
+    let timedOut = false;
 
-    res.json({ content: response });
+    const onClose = () => {
+      try { abortController.abort(); } catch (_) {}
+    };
+    req.on('close', onClose);
+    res.on('close', onClose);
+    const timeoutId = setTimeout(() => { timedOut = true; try { abortController.abort(); } catch (_) {} }, ROUTE_TIMEOUT_MS);
+
+    const cleanup = () => {
+      clearTimeout(timeoutId);
+      req.off('close', onClose);
+      res.off('close', onClose);
+    };
+
+    let response;
+    try {
+      response = await aiService.generateContent(sanitizedPrompt, {
+        model: model || undefined,
+        temperature: temperature !== undefined ? parseFloat(temperature) : undefined,
+        maxTokens: maxTokens !== undefined ? parseInt(maxTokens) : undefined,
+        provider: provider || undefined,
+        signal: abortController.signal,
+        timeoutMs: ROUTE_TIMEOUT_MS
+      });
+    } catch (err) {
+      cleanup();
+      if (err.name === 'AbortError') {
+        // If client closed or timeout, end quietly or report 499/408
+        if (!res.headersSent && !res.writableEnded) {
+          const code = timedOut ? 408 : 499; // 408 Request Timeout or 499 Client Closed Request (non-standard)
+          return res.status(code).json({ error: timedOut ? 'Request timed out' : 'Request cancelled' });
+        }
+        return;
+      }
+      throw err;
+    }
+
+    cleanup();
+    if (!res.writableEnded) {
+      res.json({ content: response });
+    }
   } catch (error) {
     // Log full error details for debugging (server-side only)
     logger.error('AI generation error', { 
@@ -737,14 +975,50 @@ app.post('/api/ai/generate-structured', ...aiPreMiddleware, async (req, res) => 
       }
     }
 
-    const response = await aiService.generateStructuredContent(sanitizedPrompt, schema, {
-      model: model || undefined,
-      temperature: temperature !== undefined ? parseFloat(temperature) : undefined,
-      maxTokens: maxTokens !== undefined ? parseInt(maxTokens) : undefined,
-      provider: provider || undefined
-    });
+    // Setup abort/timeout similar to non-structured route
+    const abortController = new AbortController();
+    const ROUTE_TIMEOUT_MS = 60000; // 60s safety timeout
+    let timedOut = false;
 
-    res.json({ data: response });
+    const onClose = () => {
+      try { abortController.abort(); } catch (_) {}
+    };
+    req.on('close', onClose);
+    res.on('close', onClose);
+    const timeoutId = setTimeout(() => { timedOut = true; try { abortController.abort(); } catch (_) {} }, ROUTE_TIMEOUT_MS);
+
+    const cleanup = () => {
+      clearTimeout(timeoutId);
+      req.off('close', onClose);
+      res.off('close', onClose);
+    };
+
+    let response;
+    try {
+      response = await aiService.generateStructuredContent(sanitizedPrompt, schema, {
+        model: model || undefined,
+        temperature: temperature !== undefined ? parseFloat(temperature) : undefined,
+        maxTokens: maxTokens !== undefined ? parseInt(maxTokens) : undefined,
+        provider: provider || undefined,
+        signal: abortController.signal,
+        timeoutMs: ROUTE_TIMEOUT_MS
+      });
+    } catch (err) {
+      cleanup();
+      if (err.name === 'AbortError') {
+        if (!res.headersSent && !res.writableEnded) {
+          const code = timedOut ? 408 : 499;
+          return res.status(code).json({ error: timedOut ? 'Request timed out' : 'Request cancelled' });
+        }
+        return;
+      }
+      throw err;
+    }
+
+    cleanup();
+    if (!res.writableEnded) {
+      res.json({ data: response });
+    }
   } catch (error) {
     // Log full error details for debugging (server-side only)
     logger.error('AI structured generation error', { 
@@ -806,10 +1080,15 @@ app.post('/api/ai/stream', ...aiPreMiddleware, async (req, res) => {
       return res.status(400).json({ error: 'Invalid model' });
     }
 
-    // Set up SSE headers
+    // Set up SSE headers for Vercel serverless compatibility
     res.setHeader('Content-Type', 'text/event-stream');
-    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Cache-Control', 'no-cache, no-transform');
     res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no'); // Disable nginx buffering
+    res.setHeader('Transfer-Encoding', 'chunked');
+    
+    // Flush headers immediately (critical for Vercel)
+    res.flushHeaders();
 
     // Track client disconnection
     let clientClosed = false;
@@ -820,16 +1099,26 @@ app.post('/api/ai/stream', ...aiPreMiddleware, async (req, res) => {
     // Create AbortController for upstream cancellation
     const abortController = new AbortController();
 
-    // Heartbeat interval - send comment line every 20 seconds to keep connection alive
-    // Clients should handle these comment lines (they start with ':')
-    const HEARTBEAT_INTERVAL = 20000; // 20 seconds
+    // Heartbeat interval - send comment line every 15 seconds to keep connection alive
+    // Vercel serverless functions need more frequent heartbeats
+    const HEARTBEAT_INTERVAL = 15000; // 15 seconds (reduced for Vercel)
     const heartbeatInterval = setInterval(() => {
       if (clientClosed) {
         clearInterval(heartbeatInterval);
         return;
       }
-      // Send SSE comment line (keeps connection alive, ignored by EventSource)
-      res.write(': heartbeat\n\n');
+      try {
+        // Send SSE comment line (keeps connection alive, ignored by EventSource)
+        res.write(': heartbeat\n\n');
+        // Force flush in Vercel environment
+        if (res.flush && typeof res.flush === 'function') {
+          res.flush();
+        }
+      } catch (e) {
+        // Connection closed, stop heartbeat
+        clearInterval(heartbeatInterval);
+        clientClosed = true;
+      }
     }, HEARTBEAT_INTERVAL);
 
     // Maximum stream duration - abort after 5 minutes to prevent indefinite connections
@@ -866,7 +1155,20 @@ app.post('/api/ai/stream', ...aiPreMiddleware, async (req, res) => {
           cleanup();
           return;
         }
-        res.write(`data: ${JSON.stringify({ chunk, done: false })}\n\n`);
+        
+        try {
+          res.write(`data: ${JSON.stringify({ chunk, done: false })}\n\n`);
+          // Force flush after each chunk in Vercel environment
+          if (res.flush && typeof res.flush === 'function') {
+            res.flush();
+          }
+        } catch (writeError) {
+          // Client disconnected during write
+          logger.warn('Client disconnected during stream write', { error: writeError.message });
+          abortController.abort();
+          cleanup();
+          return;
+        }
       }
       
       // Check again before sending final message
@@ -994,6 +1296,8 @@ app.use('/api/multimedia', multimediaRoutes);
 app.use('/api/platforms', platformRoutes);
 app.use('/api/blog', blogRoutes);
 app.use('/api/newsletter', newsletterRoutes);
+app.use('/api/analytics', analyticsRoutes);
+app.use('/api/referrals', referralRoutes);
 
 // Marketplace checkout endpoint
 app.post('/api/marketplace/checkout', async (req, res) => {
@@ -1256,8 +1560,12 @@ if (require.main === module) {
     // Start scheduler service
     try {
       const schedulerService = require('./services/schedulerService');
-      schedulerService.startScheduler();
-      logger.info('Scheduler service started');
+      if (!isServerless) {
+        schedulerService.startScheduler();
+        logger.info('Scheduler service started');
+      } else {
+        logger.info('Serverless environment detected; interval scheduler not started');
+      }
     } catch (error) {
       logger.error(`Failed to start scheduler: ${error.message}`);
     }

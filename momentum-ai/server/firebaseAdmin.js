@@ -41,7 +41,9 @@ function initializeFirebaseAdmin() {
     // Initialize Firebase Admin
     admin.initializeApp({
       credential: admin.credential.cert(serviceAccount),
-      storageBucket: process.env.FIREBASE_STORAGE_BUCKET
+      storageBucket: process.env.FIREBASE_STORAGE_BUCKET,
+      // Required when using Realtime Database APIs
+      databaseURL: process.env.FIREBASE_DATABASE_URL
     });
 
     initialized = true;

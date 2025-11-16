@@ -65,6 +65,7 @@ if (isFirebaseConfigured) {
   
   // Create mock objects to prevent errors when Firebase is accessed
   // We need to create a proper mock that works with Firebase's onAuthStateChanged
+  // Include all methods that might be called directly on auth object
   auth = {
     currentUser: null,
     _isMock: true, // Flag to identify mock objects
@@ -80,7 +81,22 @@ if (isFirebaseConfigured) {
     signOut: async () => {
       console.warn('Firebase is not configured. Cannot sign out.');
     },
+    // Additional methods that might be called directly
+    getIdToken: async () => {
+      throw new Error('Firebase is not configured. Cannot get ID token.');
+    },
+    // Mock user object methods if currentUser is accessed
+    get currentUser() {
+      return null;
+    },
   };
+  
+  // If code tries to access auth.currentUser.getIdToken, provide a safe mock
+  // This handles cases where code does: auth.currentUser?.getIdToken()
+  Object.defineProperty(auth, 'currentUser', {
+    get: () => null,
+    configurable: true,
+  });
   
   database = null;
   db = null;

@@ -3,6 +3,7 @@ const router = express.Router();
 const multer = require('multer');
 const logger = require('../utils/logger');
 const admin = require('../firebaseAdmin');
+const { checkLimit, recordUsage } = require('../utils/subscriptionHelper');
 const { 
   sanitizeFilename, 
   validateImageFile, 
@@ -86,7 +87,7 @@ router.post('/image/generate', async (req, res) => {
     // Validate reference image URL if provided
     let validatedReferenceImage = null;
     if (referenceImage) {
-      const urlValidation = validateUrl(referenceImage, true);
+      const urlValidation = await validateUrl(referenceImage, true);
       if (!urlValidation.valid) {
         return res.status(400).json({ error: `Invalid reference image URL: ${urlValidation.error}` });
       }
@@ -100,7 +101,16 @@ router.post('/image/generate', async (req, res) => {
     // Validate n (number of images)
     const validN = Math.min(Math.max(1, parseInt(n) || 1), 4); // Limit to 1-4
 
-    // TODO: Check user's plan limits
+    // Check user's plan limits
+    const limitCheck = await checkLimit(userId, 'image', validN);
+    if (!limitCheck.allowed) {
+      return res.status(429).json({
+        error: limitCheck.reason,
+        plan: limitCheck.plan,
+        used: limitCheck.used,
+        limit: limitCheck.limit,
+      });
+    }
     
     const result = await imageGenerationService.generateImage(promptValidation.prompt, {
       provider,
@@ -113,6 +123,9 @@ router.post('/image/generate', async (req, res) => {
     });
     
     logger.info('Image generation completed', { userId, provider, size });
+    
+    // Record usage
+    await recordUsage(userId, 'image', validN);
     
     res.json(result);
   } catch (error) {
@@ -140,7 +153,7 @@ router.post('/image/edit', upload.single('image'), async (req, res) => {
       return res.status(400).json({ error: 'Image URL is required' });
     }
 
-    const urlValidation = validateUrl(imageUrl, true);
+    const urlValidation = await validateUrl(imageUrl, true);
     if (!urlValidation.valid) {
       return res.status(400).json({ error: `Invalid image URL: ${urlValidation.error}` });
     }
@@ -173,7 +186,7 @@ router.post('/image/variations', async (req, res) => {
       return res.status(400).json({ error: 'Image URL is required' });
     }
 
-    const urlValidation = validateUrl(imageUrl, true);
+    const urlValidation = await validateUrl(imageUrl, true);
     if (!urlValidation.valid) {
       return res.status(400).json({ error: `Invalid image URL: ${urlValidation.error}` });
     }
@@ -263,7 +276,7 @@ router.post('/image/upscale', async (req, res) => {
       return res.status(400).json({ error: 'Image URL is required' });
     }
 
-    const urlValidation = validateUrl(imageUrl, true);
+    const urlValidation = await validateUrl(imageUrl, true);
     if (!urlValidation.valid) {
       return res.status(400).json({ error: `Invalid image URL: ${urlValidation.error}` });
     }
@@ -310,7 +323,7 @@ router.post('/video/generate', async (req, res) => {
     // Validate image preview URL if provided
     let validatedImagePreview = null;
     if (imagePreview) {
-      const urlValidation = validateUrl(imagePreview, true);
+      const urlValidation = await validateUrl(imagePreview, true);
       if (!urlValidation.valid) {
         return res.status(400).json({ error: `Invalid image preview URL: ${urlValidation.error}` });
       }
@@ -320,7 +333,17 @@ router.post('/video/generate', async (req, res) => {
     // Validate duration
     const validDuration = Math.min(Math.max(1, parseInt(duration) || 6), 60); // Limit to 1-60 seconds
 
-    // TODO: Check user's plan limits
+    // Check user's plan limits
+    const limitCheck = await checkLimit(userId, 'video', validDuration);
+    if (!limitCheck.allowed) {
+      return res.status(429).json({
+        error: limitCheck.reason,
+        plan: limitCheck.plan,
+        used: limitCheck.used,
+        limit: limitCheck.limit,
+        requested: limitCheck.requested,
+      });
+    }
     
     const result = await videoGenerationService.generateVideo(prompt || null, {
       provider,
@@ -346,6 +369,9 @@ router.post('/video/generate', async (req, res) => {
     });
     
     logger.info('Video generation job created', { userId, jobId: result.jobId, provider: result.provider });
+    
+    // Record usage
+    await recordUsage(userId, 'video', 1);
     
     res.json(result);
   } catch (error) {
@@ -443,7 +469,7 @@ router.post('/video/image-to-video', async (req, res) => {
       return res.status(400).json({ error: 'Image URL is required' });
     }
 
-    const urlValidation = validateUrl(imageUrl, true);
+    const urlValidation = await validateUrl(imageUrl, true);
     if (!urlValidation.valid) {
       return res.status(400).json({ error: `Invalid image URL: ${urlValidation.error}` });
     }
@@ -461,6 +487,18 @@ router.post('/video/image-to-video', async (req, res) => {
 
     // Validate motion strength
     const validMotionStrength = Math.min(Math.max(0, parseFloat(motionStrength) || 0.5), 1); // Limit to 0-1
+
+    // Check user's plan limits
+    const limitCheck = await checkLimit(userId, 'video', validDuration);
+    if (!limitCheck.allowed) {
+      return res.status(429).json({
+        error: limitCheck.reason,
+        plan: limitCheck.plan,
+        used: limitCheck.used,
+        limit: limitCheck.limit,
+        requested: limitCheck.requested,
+      });
+    }
 
     const result = await videoGenerationService.imageToVideo(urlValidation.url, prompt || null, {
       provider,
@@ -487,6 +525,9 @@ router.post('/video/image-to-video', async (req, res) => {
     });
     
     logger.info('Image-to-video job created', { userId, jobId: result.jobId });
+    
+    // Record usage
+    await recordUsage(userId, 'video', 1);
     
     res.json(result);
   } catch (error) {
@@ -530,7 +571,19 @@ router.post('/voice/generate', async (req, res) => {
       validPitch = Math.min(Math.max(-1.0, parseFloat(pitch) || 0.0), 1.0); // Limit to -1.0 to 1.0
     }
 
-    // TODO: Check user's plan limits (minutes per month)
+    // Estimate voice duration (rough estimate: ~150 words per minute)
+    const estimatedMinutes = Math.ceil(text.split(/\s+/).length / 150);
+    
+    // Check user's plan limits (minutes per month)
+    const limitCheck = await checkLimit(userId, 'voice', estimatedMinutes);
+    if (!limitCheck.allowed) {
+      return res.status(429).json({
+        error: limitCheck.reason,
+        plan: limitCheck.plan,
+        used: limitCheck.used,
+        limit: limitCheck.limit,
+      });
+    }
     
     const result = await voiceGenerationService.generateVoiceOver(text, voiceId, {
       provider,
@@ -542,6 +595,10 @@ router.post('/voice/generate', async (req, res) => {
     });
     
     logger.info('Voice generation completed', { userId, provider, duration: result.duration });
+    
+    // Record usage (use actual duration from result if available, otherwise estimated)
+    const actualMinutes = result.duration ? Math.ceil(result.duration / 60) : estimatedMinutes;
+    await recordUsage(userId, 'voice', actualMinutes);
     
     res.json(result);
   } catch (error) {

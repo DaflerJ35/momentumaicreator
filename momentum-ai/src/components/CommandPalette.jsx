@@ -233,13 +233,13 @@ const CommandPalette = () => {
                               whileHover={{ x: 4 }}
                               whileTap={{ scale: 0.98 }}
                               onClick={item.action}
-                              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-gradient-to-r hover:from-[hsl(200,100%,50%)]/10 hover:to-[hsl(280,85%,60%)]/10 text-left group transition-all"
+                              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-gradient-to-r hover:from-brand-cyan/10 hover:to-brand-purple/10 text-left group transition-all"
                             >
                               <div className="p-2 rounded-lg bg-slate-800/50 group-hover:bg-gradient-to-br group-hover:from-[hsl(200,100%,50%)] group-hover:to-[hsl(280,85%,60%)] transition-all">
                                 <Icon className="h-4 w-4 text-slate-400 group-hover:text-white transition-colors" />
                               </div>
                               <div className="flex-1">
-                                <div className="text-white font-medium group-hover:text-[hsl(200,100%,50%)] transition-colors">
+                                <div className="text-white font-medium group-hover:text-[hsl(var(--brand-cyan))] transition-colors">
                                   {item.title}
                                 </div>
                                 <div className="text-xs text-slate-500">{item.subtitle}</div>

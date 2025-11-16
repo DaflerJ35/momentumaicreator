@@ -99,11 +99,11 @@ export const PLATFORMS = {
     color: '#FF0000',
     category: 'social',
     enabled: true,
-    features: ['videos', 'shorts', 'livestream', 'community'],
+    features: ['videos', 'shorts', 'livestream', 'community', 'posts'],
     apiRequired: true,
     maxPostLength: 5000,
     maxVideoLength: 43200, // seconds (12 hours)
-    supportedMedia: ['video'],
+    supportedMedia: ['video', 'image'],
   },
   facebook: {
     id: 'facebook',
@@ -171,7 +171,7 @@ export const PLATFORMS = {
     icon: '🤖',
     color: '#FF4500',
     category: 'social',
-    enabled: false, // OAuth implementation coming soon
+    enabled: true,
     features: ['posts', 'comments', 'subreddits'],
     apiRequired: true,
     maxPostLength: 40000,
@@ -183,7 +183,7 @@ export const PLATFORMS = {
     icon: '💬',
     color: '#5865F2',
     category: 'social',
-    enabled: false, // OAuth implementation coming soon
+    enabled: true,
     features: ['messages', 'channels', 'servers'],
     apiRequired: true,
     maxPostLength: 2000,
@@ -209,7 +209,7 @@ export const PLATFORMS = {
     icon: '📰',
     color: '#000000',
     category: 'blog',
-    enabled: false, // OAuth implementation coming soon
+    enabled: true,
     features: ['articles', 'publications', 'series'],
     apiRequired: true,
     maxPostLength: 100000,
@@ -221,7 +221,7 @@ export const PLATFORMS = {
     icon: '📧',
     color: '#FF6719',
     category: 'blog',
-    enabled: false, // OAuth implementation coming soon
+    enabled: true,
     features: ['posts', 'newsletters', 'comments'],
     apiRequired: true,
     maxPostLength: 100000,
@@ -247,7 +247,7 @@ export const PLATFORMS = {
     icon: '🎨',
     color: '#F96854',
     category: 'subscription',
-    enabled: false, // OAuth implementation coming soon
+    enabled: true,
     features: ['posts', 'tiers', 'media'],
     apiRequired: true,
     maxPostLength: 10000,
@@ -259,7 +259,7 @@ export const PLATFORMS = {
     icon: '☕',
     color: '#FF5E5B',
     category: 'subscription',
-    enabled: false, // OAuth implementation coming soon
+    enabled: true,
     features: ['posts', 'commissions', 'shop'],
     apiRequired: true,
     maxPostLength: 10000,

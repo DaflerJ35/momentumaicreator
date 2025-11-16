@@ -44,7 +44,7 @@ class VideoGenerationService {
 
     // Validate image preview URL if provided
     if (imagePreview) {
-      const urlValidation = validateUrl(imagePreview, true);
+      const urlValidation = await validateUrl(imagePreview, true);
       if (!urlValidation.valid) {
         throw new Error(`Invalid image preview URL: ${urlValidation.error}`);
       }

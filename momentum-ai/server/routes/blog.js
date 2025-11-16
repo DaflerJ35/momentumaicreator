@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const logger = require('../utils/logger');
 const { verifyFirebaseToken } = require('../middleware/auth');
+const admin = require('../firebaseAdmin');
 
 /**
  * Post to WordPress
@@ -12,16 +13,14 @@ router.post('/wordpress', verifyFirebaseToken, async (req, res) => {
     const userId = req.user.uid;
     const { title, content, categories, tags, featuredImage, status = 'publish' } = req.body;
     
-    // Get WordPress credentials
     const wpConfig = await getWordPressConfig(userId);
     if (!wpConfig) {
       return res.status(400).json({
         success: false,
-        error: 'WordPress not configured',
+        error: 'WordPress not configured. Please configure your WordPress credentials in settings.',
       });
     }
     
-    // Post to WordPress via REST API
     const result = await postToWordPress(wpConfig, {
       title,
       content,
@@ -39,7 +38,7 @@ router.post('/wordpress', verifyFirebaseToken, async (req, res) => {
     logger.error(`WordPress post error: ${error.message}`);
     res.status(500).json({
       success: false,
-      error: error.message,
+      error: error.message || 'Failed to post to WordPress. Please try again.',
     });
   }
 });
@@ -51,13 +50,13 @@ router.post('/wordpress', verifyFirebaseToken, async (req, res) => {
 router.post('/medium', verifyFirebaseToken, async (req, res) => {
   try {
     const userId = req.user.uid;
-    const { title, content, tags, publishStatus = 'public' } = req.body;
+    const { title, content, tags, publishStatus = 'draft' } = req.body;
     
     const tokens = await getMediumTokens(userId);
     if (!tokens) {
       return res.status(400).json({
         success: false,
-        error: 'Medium not connected',
+        error: 'Medium not configured. Please connect your Medium account in settings.',
       });
     }
     
@@ -76,7 +75,7 @@ router.post('/medium', verifyFirebaseToken, async (req, res) => {
     logger.error(`Medium post error: ${error.message}`);
     res.status(500).json({
       success: false,
-      error: error.message,
+      error: error.message || 'Failed to post to Medium. Please try again.',
     });
   }
 });
@@ -94,7 +93,7 @@ router.post('/substack', verifyFirebaseToken, async (req, res) => {
     if (!tokens) {
       return res.status(400).json({
         success: false,
-        error: 'Substack not connected',
+        error: 'Substack not configured. Please connect your Substack account in settings.',
       });
     }
     
@@ -113,7 +112,7 @@ router.post('/substack', verifyFirebaseToken, async (req, res) => {
     logger.error(`Substack post error: ${error.message}`);
     res.status(500).json({
       success: false,
-      error: error.message,
+      error: error.message || 'Failed to post to Substack. Please try again.',
     });
   }
 });
@@ -131,7 +130,7 @@ router.post('/ghost', verifyFirebaseToken, async (req, res) => {
     if (!ghostConfig) {
       return res.status(400).json({
         success: false,
-        error: 'Ghost not configured',
+        error: 'Ghost not configured. Please configure your Ghost credentials in settings.',
       });
     }
     
@@ -159,10 +158,32 @@ router.post('/ghost', verifyFirebaseToken, async (req, res) => {
 // Helper functions
 
 async function getWordPressConfig(userId) {
-  // Get WordPress site URL, username, application password from database
+  // Get WordPress site URL, username, application password from Firestore
   logger.info(`Getting WordPress config for user: ${userId}`);
-  // TODO: Implement database retrieval
-  return null;
+  try {
+    const db = admin.firestore();
+    const configDoc = await db.collection('blogConfigs').doc(userId).get();
+    
+    if (!configDoc.exists) {
+      return null;
+    }
+    
+    const data = configDoc.data();
+    const wpConfig = data.wordpress;
+    
+    if (!wpConfig || !wpConfig.siteUrl || !wpConfig.username || !wpConfig.appPassword) {
+      return null;
+    }
+    
+    return {
+      siteUrl: wpConfig.siteUrl,
+      username: wpConfig.username,
+      appPassword: wpConfig.appPassword,
+    };
+  } catch (error) {
+    logger.error(`Error getting WordPress config for user ${userId}:`, error);
+    return null;
+  }
 }
 
 async function postToWordPress(config, { title, content, categories, tags, featuredImage, status }) {
@@ -195,8 +216,29 @@ async function postToWordPress(config, { title, content, categories, tags, featu
 
 async function getMediumTokens(userId) {
   logger.info(`Getting Medium tokens for user: ${userId}`);
-  // TODO: Implement token retrieval
-  return null;
+  try {
+    const db = admin.firestore();
+    const configDoc = await db.collection('blogConfigs').doc(userId).get();
+    
+    if (!configDoc.exists) {
+      return null;
+    }
+    
+    const data = configDoc.data();
+    const mediumTokens = data.medium;
+    
+    if (!mediumTokens || !mediumTokens.accessToken) {
+      return null;
+    }
+    
+    return {
+      accessToken: mediumTokens.accessToken,
+      refreshToken: mediumTokens.refreshToken,
+    };
+  } catch (error) {
+    logger.error(`Error getting Medium tokens for user ${userId}:`, error);
+    return null;
+  }
 }
 
 async function postToMedium(tokens, { title, content, tags, publishStatus }) {
@@ -236,8 +278,29 @@ async function postToMedium(tokens, { title, content, tags, publishStatus }) {
 
 async function getSubstackTokens(userId) {
   logger.info(`Getting Substack tokens for user: ${userId}`);
-  // TODO: Implement token retrieval
-  return null;
+  try {
+    const db = admin.firestore();
+    const configDoc = await db.collection('blogConfigs').doc(userId).get();
+    
+    if (!configDoc.exists) {
+      return null;
+    }
+    
+    const data = configDoc.data();
+    const substackTokens = data.substack;
+    
+    if (!substackTokens || !substackTokens.accessToken) {
+      return null;
+    }
+    
+    return {
+      accessToken: substackTokens.accessToken,
+      refreshToken: substackTokens.refreshToken,
+    };
+  } catch (error) {
+    logger.error(`Error getting Substack tokens for user ${userId}:`, error);
+    return null;
+  }
 }
 
 async function postToSubstack(tokens, { title, body, subtitle, sendEmail }) {
@@ -265,8 +328,29 @@ async function postToSubstack(tokens, { title, body, subtitle, sendEmail }) {
 
 async function getGhostConfig(userId) {
   logger.info(`Getting Ghost config for user: ${userId}`);
-  // TODO: Implement config retrieval
-  return null;
+  try {
+    const db = admin.firestore();
+    const configDoc = await db.collection('blogConfigs').doc(userId).get();
+    
+    if (!configDoc.exists) {
+      return null;
+    }
+    
+    const data = configDoc.data();
+    const ghostConfig = data.ghost;
+    
+    if (!ghostConfig || !ghostConfig.ghostUrl || !ghostConfig.apiKey) {
+      return null;
+    }
+    
+    return {
+      ghostUrl: ghostConfig.ghostUrl,
+      apiKey: ghostConfig.apiKey,
+    };
+  } catch (error) {
+    logger.error(`Error getting Ghost config for user ${userId}:`, error);
+    return null;
+  }
 }
 
 async function postToGhost(config, { title, html, tags, featured, status }) {

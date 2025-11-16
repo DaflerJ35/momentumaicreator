@@ -45,11 +45,12 @@
   --color-info: var(--color-cyan-500);
 
   /* Neon Colors */
-  --neon-blue: hsl(200, 100%, 50%);
-  --neon-magenta: hsl(320, 90%, 55%);
-  --neon-violet: hsl(280, 85%, 60%);
-  --cosmic-purple: hsl(265, 80%, 30%);
-  --deep-space: hsl(240, 10%, 5%);
+  /* Use numeric HSL tokens so we can reference with hsl(var(--token)) */
+  --neon-blue: 200 100% 50%;
+  --neon-magenta: 320 90% 55%;
+  --neon-violet: 280 85% 60%;
+  --cosmic-purple: 265 80% 30%;
+  --deep-space: 240 10% 5%;
 
   /* Spacing Scale */
   --space-1: 0.25rem;   /* 4px */
@@ -172,8 +173,54 @@
 @tailwind utilities;
 
 @layer base {
+  :root {
+    /* Theme tokens used by Tailwind (HSL numeric values) */
+    --background: 240 10% 5%;
+    --foreground: 0 0% 98%;
+
+    --card: 240 8% 8%;
+    --card-foreground: 0 0% 98%;
+
+    --popover: 240 8% 8%;
+    --popover-foreground: 0 0% 98%;
+
+    --primary: 276 91% 66%; /* Matches landing #A855F7 */
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 240 5% 15%;
+    --secondary-foreground: 0 0% 98%;
+
+    --muted: 240 5% 20%;
+    --muted-foreground: 240 5% 65%;
+
+    --accent: 330 80% 64%; /* Matches landing #EC4899 */
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%;
+
+    --border: 240 5% 20%;
+    --input: 240 5% 15%;
+    --ring: 280 85% 60%;
+
+    /* Sidebar tokens used by sidebar components */
+    --sidebar-background: 240 8% 8%;
+    --sidebar-foreground: 0 0% 98%;
+    --sidebar-primary: 280 85% 60%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 240 5% 15%;
+    --sidebar-accent-foreground: 0 0% 98%;
+    --sidebar-border: 240 5% 20%;
+    --sidebar-ring: 280 85% 60%;
+
+    /* Marketing site brand tokens (HSL numeric values) */
+    --brand-cyan: 189 85% 56%;   /* #22D3EE */
+    --brand-purple: 276 91% 66%; /* #A855F7 */
+    --brand-pink: 330 80% 64%;   /* #EC4899 */
+  }
+
   * {
-    @apply border-slate-800;
+    @apply border-border;
   }
 
   html {
@@ -182,9 +229,8 @@
   }
   
   body {
-    @apply antialiased text-slate-100;
+    @apply antialiased bg-background text-foreground;
     font-family: 'Inter', sans-serif;
-    background: #0f172a;
     overflow-x: hidden;
   }
   
@@ -229,6 +275,14 @@
 }
 
 @layer components {
+  /* Momentum brand gradient utilities (match landing page) */
+  .bg-momentum-gradient {
+    background-image: linear-gradient(135deg, hsl(var(--brand-cyan)) 0%, hsl(var(--brand-purple)) 50%, hsl(var(--brand-pink)) 100%);
+  }
+  .from-brand-cyan { --tw-gradient-from: hsl(var(--brand-cyan)) var(--tw-gradient-from-position); --tw-gradient-to: hsl(var(--brand-cyan) / 0) var(--tw-gradient-to-position); --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to); }
+  .via-brand-purple { --tw-gradient-to: hsl(var(--brand-purple) / 0) var(--tw-gradient-to-position); --tw-gradient-stops: var(--tw-gradient-from), hsl(var(--brand-purple)) var(--tw-gradient-via-position), var(--tw-gradient-to); }
+  .to-brand-purple { --tw-gradient-to: hsl(var(--brand-purple)) var(--tw-gradient-to-position); }
+  .to-brand-pink { --tw-gradient-to: hsl(var(--brand-pink)) var(--tw-gradient-to-position); }
   /* Floating Text Effect - Respect reduced motion */
   .floating-text {
     @apply relative;

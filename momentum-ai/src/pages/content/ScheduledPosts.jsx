@@ -26,12 +26,23 @@ const ScheduledPosts = () => {
   const loadScheduledPosts = async () => {
     try {
       setLoading(true);
-      // This would call an API endpoint to get scheduled posts
-      // For now, we'll use a placeholder
-      const posts = []; // TODO: Implement API endpoint
-      setScheduledPosts(posts);
+      const response = await unifiedAPI.get('/platforms/scheduled');
+      const posts = response.posts || [];
+      // Transform posts to match expected format
+      const transformedPosts = posts.map(post => ({
+        id: post.id,
+        platformId: post.platformId,
+        content: post.content,
+        scheduleTime: post.scheduleTime,
+        status: post.status || 'scheduled',
+        media: post.media,
+        createdAt: post.createdAt,
+      }));
+      setScheduledPosts(transformedPosts);
     } catch (error) {
+      console.error('Failed to load scheduled posts:', error);
       toast.error('Failed to load scheduled posts');
+      setScheduledPosts([]);
     } finally {
       setLoading(false);
     }
@@ -39,10 +50,11 @@ const ScheduledPosts = () => {
 
   const handleDelete = async (postId) => {
     try {
-      // TODO: Implement delete API
+      await unifiedAPI.delete(`/platforms/scheduled/${postId}`);
       setScheduledPosts(scheduledPosts.filter(p => p.id !== postId));
       toast.success('Scheduled post deleted');
     } catch (error) {
+      console.error('Failed to delete scheduled post:', error);
       toast.error('Failed to delete scheduled post');
     }
   };

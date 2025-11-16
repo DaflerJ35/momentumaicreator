@@ -13,9 +13,36 @@
 const logger = require('../utils/logger');
 const admin = require('../firebaseAdmin');
 
-// In-memory store for IP tracking (in production, use Redis or database)
+// In-memory store for IP tracking (fallback)
 // Key: IP address, Value: { count: number, firstAttempt: timestamp, accounts: string[] }
 const ipTracking = new Map();
+
+// Optional Redis client for persistent IP tracking in production
+let redisClient = null;
+let redisAvailable = false;
+async function initRedisIfConfigured() {
+  try {
+    if (redisAvailable || redisClient) return;
+    const url = process.env.REDIS_URL;
+    if (!url) return;
+    const redis = require('redis');
+    redisClient = redis.createClient({
+      url,
+      password: process.env.REDIS_PASSWORD,
+    });
+    redisClient.on('error', (err) => {
+      logger.error('Redis (trialValidation) client error', { error: err.message });
+    });
+    await redisClient.connect();
+    redisAvailable = true;
+    logger.info('Trial/IP anti-abuse using Redis backend');
+  } catch (e) {
+    logger.warn('Failed to initialize Redis for trial/IP anti-abuse; falling back to in-memory', { error: e.message });
+    redisAvailable = false;
+  }
+}
+// Fire and forget initialization
+initRedisIfConfigured();
 
 // Configuration
 const TRIAL_PERIOD_DAYS = 3;
@@ -52,7 +79,7 @@ function getClientIP(req) {
  * Track IP address for account creation
  * Returns true if account creation is allowed, false if blocked
  */
-function trackIPForAccountCreation(ip) {
+function trackIPForAccountCreationMemory(ip) {
   const now = Date.now();
   const tracking = ipTracking.get(ip);
 
@@ -89,6 +116,34 @@ function trackIPForAccountCreation(ip) {
 }
 
 /**
+ * Track IP address for account creation with Redis (if available)
+ * Returns true if allowed, false if blocked
+ */
+async function trackIPForAccountCreation(ip) {
+  // Prefer Redis if available
+  if (redisAvailable && redisClient) {
+    try {
+      const key = `trial:ip:${ip}`;
+      const ttlSeconds = Math.floor(IP_TRACKING_WINDOW_MS / 1000);
+      // Use INCR and set expiry on first increment
+      const count = await redisClient.incr(key);
+      if (count === 1) {
+        await redisClient.expire(key, ttlSeconds);
+      }
+      if (count > MAX_ACCOUNTS_PER_IP) {
+        logger.warn(`IP ${ip} exceeded account creation limit (Redis): ${count}/${MAX_ACCOUNTS_PER_IP}`);
+        return false;
+      }
+      return true;
+    } catch (e) {
+      logger.warn('Redis tracking failed; falling back to memory', { error: e.message });
+      // Fall through to memory
+    }
+  }
+  return trackIPForAccountCreationMemory(ip);
+}
+
+/**
  * Add account to IP tracking
  */
 function addAccountToIPTracking(ip, userId) {
@@ -112,9 +167,36 @@ async function checkTrialEligibility(userEmail, userIP, userId = null) {
       };
     }
 
-    // Check if user already has a trial account (by email)
-    // This would require checking Firebase/Database for existing accounts
-    // For now, we rely on Stripe's subscription system
+    // Check Firestore subscription state as the source of truth, if available
+    if (userId && admin && admin.firestore) {
+      try {
+        const doc = await admin.firestore().collection('subscriptions').doc(userId).get();
+        if (doc.exists) {
+          const sub = doc.data() || {};
+          const status = (sub.status || '').toLowerCase();
+          const now = Date.now();
+          const periodEnd = sub.current_period_end ? new Date(sub.current_period_end).getTime() : null;
+
+          // If active paid subscription exists, allow
+          if (status === 'active') {
+            return { allowed: true };
+          }
+          // If in trial and not expired, allow
+          if (status === 'trialing' && periodEnd && periodEnd > now) {
+            return { allowed: true };
+          }
+          // If canceled or trial expired, block
+          if (status === 'canceled' || (status === 'trialing' && periodEnd && periodEnd <= now)) {
+            return {
+              allowed: false,
+              reason: 'Trial period has ended for this account. Please upgrade to continue.'
+            };
+          }
+        }
+      } catch (e) {
+        logger.warn('Failed to read subscription state from Firestore during trial check', { error: e.message });
+      }
+    }
 
     return { allowed: true };
   } catch (error) {
@@ -181,7 +263,7 @@ async function validateTrialPeriod(stripeSubscription) {
 }
 
 /**
- * Get user's Stripe subscription
+ * Get user's Stripe subscription (fallback when Firestore not available)
  */
 async function getUserStripeSubscription(userId, stripe) {
   try {
@@ -238,22 +320,47 @@ async function validateTrialMiddleware(req, res, next) {
       return next();
     }
 
-    // Get Stripe instance (passed as parameter or from app context)
-    let stripe = req.stripe;
-    if (!stripe && req.app && req.app.get) {
-      stripe = req.app.get('stripe');
-    }
-    if (!stripe) {
-      // If Stripe is not configured, allow access (development mode)
-      logger.warn('Stripe not available for trial validation - allowing access');
-      return next();
+    // First check Firestore subscription store for fast-path entitlement
+    let validation = { isValid: false, isPaid: false };
+    try {
+      if (admin && admin.firestore) {
+        const doc = await admin.firestore().collection('subscriptions').doc(req.user.uid).get();
+        if (doc.exists) {
+          const sub = doc.data() || {};
+          const status = (sub.status || '').toLowerCase();
+          const now = Date.now();
+          const periodEnd = sub.current_period_end ? new Date(sub.current_period_end).getTime() : null;
+
+          if (status === 'active') {
+            validation = { isValid: true, isPaid: true };
+          } else if (status === 'trialing' && periodEnd && periodEnd > now) {
+            const daysRemaining = Math.ceil((periodEnd - now) / (24 * 60 * 60 * 1000));
+            validation = { isValid: true, isPaid: false, daysRemaining };
+          } else if (status) {
+            validation = { isValid: false, isPaid: false, reason: `Subscription status: ${status}` };
+          }
+        }
+      }
+    } catch (e) {
+      logger.warn('Failed to read Firestore subscription in middleware, falling back to Stripe', { error: e.message });
     }
 
-    // Get user's subscription
-    const subscription = await getUserStripeSubscription(req.user.uid, stripe);
+    // If Firestore did not yield a definitive allow, fall back to Stripe check
+    if (!validation.isValid) {
+      // Get Stripe instance (passed as parameter or from app context)
+      let stripe = req.stripe;
+      if (!stripe && req.app && req.app.get) {
+        stripe = req.app.get('stripe');
+      }
+      if (!stripe) {
+        // If Stripe is not configured, allow access (development mode)
+        logger.warn('Stripe not available for trial validation - allowing access');
+        return next();
+      }
 
-    // Validate trial period
-    const validation = await validateTrialPeriod(subscription);
+      const subscription = await getUserStripeSubscription(req.user.uid, stripe);
+      validation = await validateTrialPeriod(subscription);
+    }
 
     if (!validation.isValid && !validation.isPaid) {
       return res.status(403).json({

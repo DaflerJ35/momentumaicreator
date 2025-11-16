@@ -9,7 +9,10 @@ const logFormat = printf(({ level, message, timestamp, stack }) => {
   return log;
 });
 
-// Create logger instance
+// Detect serverless environment (e.g., Vercel or AWS Lambda)
+const isServerless = !!process.env.VERCEL || !!process.env.AWS_REGION;
+
+// Base logger instance
 const logger = createLogger({
   level: 'info',
   format: combine(
@@ -18,39 +21,42 @@ const logger = createLogger({
     json()
   ),
   defaultMeta: { service: 'momentum-ai' },
-  transports: [
-    // Write all logs with level `error` and below to `error.log`
-    new transports.File({ 
-      filename: path.join('logs', 'error.log'), 
-      level: 'error',
-      maxsize: 5242880, // 5MB
-      maxFiles: 5
-    }),
-    // Write all logs to `combined.log`
-    new transports.File({ 
-      filename: path.join('logs', 'combined.log'),
-      maxsize: 10485760, // 10MB
-      maxFiles: 5
-    })
-  ],
-  exceptionHandlers: [
-    new transports.File({ filename: path.join('logs', 'exceptions.log') })
-  ],
-  rejectionHandlers: [
-    new transports.File({ filename: path.join('logs', 'rejections.log') })
-  ]
+  transports: [],
+  exceptionHandlers: [],
+  rejectionHandlers: []
 });
 
-// If we're not in production, log to the console as well
-if (process.env.NODE_ENV !== 'production') {
-  logger.add(new transports.Console({
-    format: combine(
-      colorize(),
-      timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
-      format.errors({ stack: true }),
-      logFormat
-    )
+// Console transport is always enabled
+logger.add(new transports.Console({
+  format: combine(
+    colorize(),
+    timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
+    format.errors({ stack: true }),
+    logFormat
+  )
+}));
+
+// Add file transports only when not running in serverless
+if (!isServerless) {
+  logger.add(new transports.File({
+    filename: path.join('logs', 'error.log'),
+    level: 'error',
+    maxsize: 5242880, // 5MB
+    maxFiles: 5
   }));
+  logger.add(new transports.File({
+    filename: path.join('logs', 'combined.log'),
+    maxsize: 10485760, // 10MB
+    maxFiles: 5
+  }));
+
+  // Exception/rejection handlers to files in non-serverless environments
+  logger.exceptions.handle(
+    new transports.File({ filename: path.join('logs', 'exceptions.log') })
+  );
+  logger.rejections.handle(
+    new transports.File({ filename: path.join('logs', 'rejections.log') })
+  );
 }
 
 // Create a stream object with a 'write' function for morgan

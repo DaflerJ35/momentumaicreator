@@ -2,6 +2,8 @@ const express = require('express');
 const router = express.Router();
 const logger = require('../utils/logger');
 const admin = require('../firebaseAdmin');
+const { getUserSubscription, checkLimit } = require('../utils/subscriptionHelper');
+const { sendTeamInvitation } = require('../utils/emailService');
 
 // Middleware to verify Firebase token
 const verifyToken = async (req, res, next) => {
@@ -76,7 +78,14 @@ router.post('/', async (req, res) => {
     }
 
     // Check user's subscription tier for team limits
-    // TODO: Implement subscription check via Stripe
+    const subscription = await getUserSubscription(userId);
+    const limitCheck = await checkLimit(userId, 'teamMember', 1);
+    if (!limitCheck.allowed) {
+      return res.status(403).json({
+        error: limitCheck.reason,
+        plan: limitCheck.plan,
+      });
+    }
 
     const newTeam = {
       name,
@@ -96,7 +105,7 @@ router.post('/', async (req, res) => {
       settings: {
         defaultRole: 'editor',
         requireApproval: true,
-        maxMembers: 10 // Default, check subscription for actual limit
+        maxMembers: limitCheck.limit || 10 // Use subscription limit
       }
     };
 
@@ -269,9 +278,24 @@ router.post('/:teamId/members', async (req, res) => {
       return res.status(403).json({ error: 'Admin access required' });
     }
 
-    // Check member limit
-    if (team.members.length >= (team.settings?.maxMembers || 10)) {
-      return res.status(400).json({ error: 'Team member limit reached' });
+    // Check member limit based on subscription
+    const subscription = await getUserSubscription(userId);
+    const limitCheck = await checkLimit(userId, 'teamMember', team.members.length + 1);
+    if (!limitCheck.allowed) {
+      return res.status(403).json({
+        error: limitCheck.reason,
+        plan: limitCheck.plan,
+        limit: limitCheck.limit,
+      });
+    }
+    
+    // Also check team's configured limit
+    const maxMembers = team.settings?.maxMembers || limitCheck.limit || 10;
+    if (team.members.length >= maxMembers) {
+      return res.status(400).json({ 
+        error: 'Team member limit reached',
+        limit: maxMembers,
+      });
     }
 
     // Add pending member
@@ -297,9 +321,34 @@ router.post('/:teamId/members', async (req, res) => {
 
     await db.collection('teams').doc(teamId).update(updates);
 
-    // TODO: Send invitation email
-    // const emailService = require('../services/emailService');
-    // await emailService.sendTeamInvitation(email, team.name, teamId);
+    // Send invitation email
+    try {
+      const inviteLink = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/team/manage?invite=${teamId}`;
+      const inviterName = req.user.email || 'A team member';
+      const emailResult = await sendTeamInvitation({
+        to: email,
+        teamName: team.name,
+        inviterName,
+        teamId,
+        inviteLink,
+      });
+      
+      if (!emailResult.success) {
+        logger.warn('Failed to send team invitation email', { 
+          email, 
+          teamId, 
+          error: emailResult.error 
+        });
+        // Don't fail the request if email fails, but log it
+      }
+    } catch (emailError) {
+      logger.error('Error sending team invitation email', { 
+        email, 
+        teamId, 
+        error: emailError.message 
+      });
+      // Don't fail the request if email fails
+    }
 
     const updatedDoc = await db.collection('teams').doc(teamId).get();
     const data = updatedDoc.data();

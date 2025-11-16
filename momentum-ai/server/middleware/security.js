@@ -100,6 +100,8 @@ const securityHeaders = (req, res, next) => {
       'https://js.stripe.com',
       'https://cdn.jsdelivr.net',
       'https://cdnjs.cloudflare.com',
+      // Vercel Live Feedback script
+      'https://vercel.live',
       ...(isDevelopment ? ["'unsafe-inline'", "'unsafe-eval'"] : []), // Allow in development only
     ],
     styleSrc: [
@@ -118,6 +120,8 @@ const securityHeaders = (req, res, next) => {
       'https://js.stripe.com',
       'https://checkout.stripe.com', // Checkout redirects
       'https://billing.stripe.com', // Billing portal
+      // Vercel Live Feedback connections
+      'https://vercel.live',
       // Firebase endpoints - Auth, Realtime Database, Firestore, Storage
       'https://*.firebaseio.com',
       'https://*.firebase.com',
@@ -144,7 +148,9 @@ const securityHeaders = (req, res, next) => {
     objectSrc: ["'none'"],
     baseUri: ["'self'"],
     formAction: ["'self'"],
-    upgradeInsecureRequests: isProduction ? ['upgrade-insecure-requests'] : null,
+    // Emit upgrade-insecure-requests directive without a value in production
+    // Using empty array ensures formatter outputs just the directive
+    upgradeInsecureRequests: isProduction ? [] : null,
   };
 
   // Build CSP string

@@ -114,25 +114,70 @@ const AdvancedAnalytics = () => {
   const loadAnalytics = async () => {
     setLoading(true);
     try {
-      // TODO: Replace with real API call
-      // const response = await unifiedAPI.get(`/analytics?range=${timeRange}&platform=${selectedPlatform}`);
-      // setAnalyticsData(response.data);
-      
-      // Simulate API delay
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      setAnalyticsData(mockData);
+      const params = new URLSearchParams({
+        range: timeRange,
+        platform: selectedPlatform,
+      });
+      const response = await unifiedAPI.get(`/analytics/advanced?${params}`);
+      setAnalyticsData(response.data || response);
     } catch (error) {
       console.error('Failed to load analytics:', error);
       toast.error('Failed to load analytics data');
-      setAnalyticsData(mockData); // Fallback to mock data
+      // Fallback to mock data only in development
+      if (import.meta.env.DEV) {
+        setAnalyticsData(mockData);
+      } else {
+        setAnalyticsData(null);
+      }
     } finally {
       setLoading(false);
     }
   };
 
-  const exportData = () => {
-    toast.success('Exporting analytics data...');
-    // TODO: Implement CSV/PDF export
+  const exportData = async () => {
+    try {
+      if (!analyticsData) {
+        toast.error('No analytics data to export');
+        return;
+      }
+      
+      // Generate CSV on client side
+      const csvRows = [];
+      
+      // Add overview data
+      csvRows.push('Metric,Value');
+      if (analyticsData.overview) {
+        Object.entries(analyticsData.overview).forEach(([key, value]) => {
+          if (key !== 'growth') {
+            csvRows.push(`${key},${value}`);
+          }
+        });
+      }
+      
+      // Add engagement data
+      if (analyticsData.engagement) {
+        csvRows.push('\nDate,Likes,Comments,Shares,Saves');
+        analyticsData.engagement.forEach(row => {
+          csvRows.push(`${row.date},${row.likes},${row.comments},${row.shares},${row.saves}`);
+        });
+      }
+      
+      const csvContent = csvRows.join('\n');
+      const blob = new Blob([csvContent], { type: 'text/csv' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `analytics-${timeRange}-${new Date().toISOString().split('T')[0]}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+      
+      toast.success('Analytics data exported successfully');
+    } catch (error) {
+      console.error('Failed to export analytics:', error);
+      toast.error('Failed to export analytics data');
+    }
   };
 
   if (loading) {

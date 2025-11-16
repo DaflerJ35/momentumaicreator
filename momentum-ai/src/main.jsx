@@ -53,16 +53,43 @@ function AIHealthCheck({ children }) {
         clearTimeout(timeoutId);
         
         if (!response.ok) {
-          const errorMessage = 'Backend AI service is not available or misconfigured.';
-          const errorDetails = [
+          // Differentiate between HTTP error types
+          let errorMessage = 'Backend AI service is not available or misconfigured.';
+          let errorDetails = [
             'Backend server is not running',
             'Backend .env has AI_PROVIDER set (gemini or ollama)',
             'Required API keys are configured (GEMINI_API_KEY or OLLAMA_URL)',
             'VITE_USE_SERVER_AI matches backend availability'
           ];
           
+          // Provide more specific error details based on status code
+          if (response.status === 404) {
+            errorMessage = 'AI models endpoint not found (404).';
+            errorDetails = [
+              'Backend routing issue - /api/ai/models endpoint may not exist',
+              'Check backend route configuration',
+              'Verify backend server is running and routes are properly mounted'
+            ];
+          } else if (response.status === 500 || response.status === 503) {
+            errorMessage = 'Backend AI service error.';
+            errorDetails = [
+              'Backend server error - check server logs',
+              'AI provider may be misconfigured',
+              'Required API keys may be missing or invalid'
+            ];
+          } else if (response.status === 401 || response.status === 403) {
+            errorMessage = 'Backend authentication/authorization error.';
+            errorDetails = [
+              'Backend authentication configuration issue',
+              'Check backend auth middleware',
+              'Verify API endpoint access permissions'
+            ];
+          }
+          
           if (import.meta.env.DEV) {
             console.warn('⚠️ AI Provider Health Check Failed:', errorMessage);
+            console.warn('HTTP Status:', response.status, response.statusText);
+            console.warn('This may indicate a routing issue rather than AI provider misconfiguration.');
           }
           
           setAiConfigError({
@@ -103,8 +130,9 @@ function AIHealthCheck({ children }) {
       } catch (error) {
         clearTimeout(timeoutId);
         
-        // Handle abort/timeout errors
-        if (error.name === 'AbortError') {
+        // Differentiate between error types for better debugging
+        if (error.name === 'AbortError' || error.name === 'TimeoutError') {
+          // Request timeout (from AbortController)
           const errorMessage = 'AI provider health check timed out.';
           const errorDetails = [
             'Backend server may be slow or unresponsive',
@@ -114,6 +142,7 @@ function AIHealthCheck({ children }) {
           
           if (import.meta.env.DEV) {
             console.warn('⚠️ AI Provider Health Check Timeout:', errorMessage);
+            console.warn('Timeout details:', { timeout: '8 seconds', endpoint: '/api/ai/models' });
           }
           
           setAiConfigError({
@@ -123,16 +152,47 @@ function AIHealthCheck({ children }) {
           return;
         }
         
-        // Show error in development, set error state for banner display
+        // Check for CORS/network errors
+        if (error.message?.includes('CORS') || 
+            error.message?.includes('Failed to fetch') ||
+            error.message?.includes('NetworkError') ||
+            error.message?.includes('network')) {
+          const errorMessage = 'Network or CORS error connecting to backend.';
+          const errorDetails = [
+            'CORS configuration issue - check backend CORS settings',
+            'Backend server may not be running',
+            'Network connectivity problem',
+            'Check if backend URL is correct'
+          ];
+          
+          if (import.meta.env.DEV) {
+            console.warn('⚠️ AI Provider Health Check - CORS/Network Error:', error.message);
+            console.warn('This is likely a routing or CORS issue, not an AI provider misconfiguration.');
+          }
+          
+          setAiConfigError({
+            message: errorMessage,
+            details: errorDetails,
+          });
+          return;
+        }
+        
+        // Generic error (could be routing, server down, etc.)
         const errorMessage = 'Could not verify backend AI provider availability.';
         const errorDetails = [
           'Backend server is not running',
           'CORS configuration issue',
-          'Network connectivity problem'
+          'Network connectivity problem',
+          'Check backend routing configuration'
         ];
         
         if (import.meta.env.DEV) {
-          console.warn('⚠️ AI Provider Health Check Error:', errorMessage, error.message);
+          console.warn('⚠️ AI Provider Health Check Error:', errorMessage);
+          console.warn('Error details:', { 
+            name: error.name, 
+            message: error.message,
+            type: 'This may be a routing/CORS issue rather than AI provider misconfiguration'
+          });
         }
         
         setAiConfigError({

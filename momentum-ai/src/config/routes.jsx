@@ -26,6 +26,7 @@ import {
   TestTube2,
   Link2,
   Send,
+  Rocket,
 } from 'lucide-react';
 
 // Lazy load page components
@@ -62,7 +63,7 @@ const SmartContentLibrary = lazy(() => import('../pages/ai-tools/SmartContentLib
 const Marketplace = lazy(() => import('../pages/growth/Marketplace'));
 const Referrals = lazy(() => import('../pages/growth/Referrals'));
 const TeamManagement = lazy(() => import('../pages/team/TeamManagement'));
-const PlatformIntegrations = lazy(() => import('../pages/integrations/PlatformIntegrations'));
+const PlatformIntegrations = lazy(() => import('../pages/integrations/PlatformIntegrationsPremium'));
 const ContentPublisher = lazy(() => import('../pages/content/ContentPublisher'));
 const FastTrackMonetization = lazy(() => import('../pages/monetization/FastTrackMonetization'));
 

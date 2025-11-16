@@ -41,10 +41,11 @@ STRIPE_6MONTH_BUSINESS_PRICE_ID=price_...
 STRIPE_6MONTH_BUSINESS_PLUS_PRICE_ID=price_...
 ```
 
-### AI Service:
+### AI Service (Frontend):
 ```
-VITE_GOOGLE_GENERATIVE_AI_API_KEY=your_key
+VITE_GEMINI_API_KEY=your_key
 ```
+Note: We standardized on VITE_GEMINI_API_KEY for the frontend. Remove any old references to VITE_GOOGLE_GENERATIVE_AI_API_KEY.
 
 ### Server Configuration:
 ```

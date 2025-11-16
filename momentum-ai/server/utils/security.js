@@ -6,6 +6,7 @@
 const logger = require('./logger');
 const { URL } = require('url');
 const path = require('path');
+const dns = require('dns').promises;
 
 /**
  * Allowed URL schemes for external resources
@@ -41,7 +42,7 @@ const ALLOWED_DOMAINS = process.env.ALLOWED_DOWNLOAD_DOMAINS
  * @param {boolean} allowDataUrl - Whether to allow data URLs (default: true)
  * @returns {Object} - { valid: boolean, url: string, error: string }
  */
-function validateUrl(url, allowDataUrl = true) {
+async function validateUrl(url, allowDataUrl = true) {
   if (!url || typeof url !== 'string') {
     return { valid: false, error: 'URL must be a non-empty string' };
   }
@@ -74,7 +75,7 @@ function validateUrl(url, allowDataUrl = true) {
     // Resolve hostname to check for private IPs
     const hostname = parsedUrl.hostname;
 
-    // Block private IP ranges
+    // Block private IP ranges by hostname string first
     for (const range of PRIVATE_IP_RANGES) {
       if (range.test(hostname)) {
         return { valid: false, error: 'URL points to private/internal IP address' };
@@ -88,6 +89,22 @@ function validateUrl(url, allowDataUrl = true) {
         lowerHostname.startsWith('127.') ||
         lowerHostname === '::1') {
       return { valid: false, error: 'URL points to localhost' };
+    }
+
+    // DNS lookup to resolve to actual IP and validate against private ranges
+    try {
+      const lookup = await dns.lookup(hostname);
+      const ip = lookup.address || '';
+      const ipLower = ip.toLowerCase();
+      for (const range of PRIVATE_IP_RANGES) {
+        if (range.test(ipLower)) {
+          return { valid: false, error: 'URL resolves to private/internal IP address' };
+        }
+      }
+    } catch (e) {
+      // If DNS resolution fails, treat as invalid for safety
+      logger.warn('DNS lookup failed for URL hostname', { hostname, error: e.message });
+      return { valid: false, error: 'Unable to resolve URL hostname' };
     }
 
     // Check allowed domains if configured

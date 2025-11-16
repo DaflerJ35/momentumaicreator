@@ -359,15 +359,15 @@ Please respond in the user's writing style based on the examples and settings pr
           className="w-full"
         >
           <TabsList className="grid w-full grid-cols-3 mb-6 glass-morphism border border-white/10">
-            <TabsTrigger value="brainstorm" className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-[hsl(200,100%,50%)] data-[state=active]:to-[hsl(280,85%,60%)] data-[state=active]:text-white">
+            <TabsTrigger value="brainstorm" className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-brand-cyan data-[state=active]:to-brand-purple data-[state=active]:text-white">
               <Sparkles className="h-4 w-4 mr-2" />
               Brainstorm
             </TabsTrigger>
-            <TabsTrigger value="draft" className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-[hsl(200,100%,50%)] data-[state=active]:to-[hsl(280,85%,60%)] data-[state=active]:text-white">
+            <TabsTrigger value="draft" className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-brand-cyan data-[state=active]:to-brand-purple data-[state=active]:text-white">
               <FileText className="h-4 w-4 mr-2" />
               Draft Assistant
             </TabsTrigger>
-            <TabsTrigger value="train" className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-[hsl(200,100%,50%)] data-[state=active]:to-[hsl(280,85%,60%)] data-[state=active]:text-white">
+            <TabsTrigger value="train" className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-brand-cyan data-[state=active]:to-brand-purple data-[state=active]:text-white">
               <Brain className="h-4 w-4 mr-2" />
               Train AI
             </TabsTrigger>
@@ -402,10 +402,10 @@ Please respond in the user's writing style based on the examples and settings pr
                             variant="outline"
                             size="icon"
                             onClick={toggleListening}
-                            className={isListening ? 'bg-[hsl(200,100%,50%)]/20 border-[hsl(200,100%,50%)]/50' : 'border-slate-700'}
+                            className={isListening ? 'bg-[hsl(var(--brand-cyan))]/20 border-[hsl(var(--brand-cyan))]/50' : 'border-slate-700'}
                           >
                             {isListening ? (
-                              <MicOff className="h-4 w-4 text-[hsl(200,100%,50%)]" />
+                              <MicOff className="h-4 w-4 text-[hsl(var(--brand-cyan))]" />
                             ) : (
                               <Mic className="h-4 w-4 text-slate-400" />
                             )}
@@ -417,7 +417,7 @@ Please respond in the user's writing style based on the examples and settings pr
                         <Button 
                           onClick={handleSendMessage}
                           disabled={!message.trim() || isGenerating}
-                          className="bg-gradient-to-r from-[hsl(200,100%,50%)] to-[hsl(280,85%,60%)] hover:from-[hsl(280,85%,60%)] hover:to-[hsl(320,90%,55%)] text-white disabled:opacity-50"
+                          className="bg-gradient-to-r from-brand-cyan to-brand-purple hover:from-brand-purple hover:to-brand-pink text-white disabled:opacity-50"
                         >
                           {isGenerating ? (
                             <Loader2 className="h-4 w-4 mr-2 animate-spin" />

@@ -692,12 +692,23 @@ async function postToFanplace(userId, { content, media, options }) {
  */
 async function postToPlatform(platformId, userId, { content, media, scheduleTime, options }) {
   const correlationId = options?.correlationId || crypto.randomUUID();
+  
+  // Import additional posting functions
+  const additionalPosting = require('./platformPostingServiceComplete');
+  
   const postingFunctions = {
     instagram: postToInstagram,
     twitter: postToTwitter,
     linkedin: postToLinkedIn,
     facebook: postToFacebook,
     tiktok: postToTikTok,
+    youtube: additionalPosting.postToYouTube,
+    reddit: additionalPosting.postToReddit,
+    discord: additionalPosting.postToDiscord,
+    medium: additionalPosting.postToMedium,
+    substack: additionalPosting.postToSubstack,
+    patreon: additionalPosting.postToPatreon,
+    ko_fi: additionalPosting.postToKoFi,
     onlyfans: postToOnlyFans,
     fansly: postToFansly,
     fanvue: postToFanvue,

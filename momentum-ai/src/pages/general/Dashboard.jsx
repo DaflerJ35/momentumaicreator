@@ -92,7 +92,7 @@ const Dashboard = () => {
       change: '+127%', 
       trend: 'up', 
       icon: Zap,
-      gradient: 'from-[hsl(200,100%,50%)] to-[hsl(280,85%,60%)]'
+      gradient: 'from-brand-cyan to-brand-purple'
     },
     { 
       title: 'Network Reach', 
@@ -100,7 +100,7 @@ const Dashboard = () => {
       change: '+89K', 
       trend: 'up', 
       icon: Users,
-      gradient: 'from-[hsl(280,85%,60%)] to-[hsl(320,90%,55%)]'
+      gradient: 'from-brand-purple to-brand-pink'
     },
     { 
       title: 'Growth Rate', 
@@ -108,7 +108,7 @@ const Dashboard = () => {
       change: '+12.4%', 
       trend: 'up', 
       icon: LineChart,
-      gradient: 'from-[hsl(200,100%,50%)] to-[hsl(320,90%,55%)]'
+      gradient: 'from-brand-cyan to-brand-pink'
     },
     { 
       title: 'Conversion', 
@@ -116,7 +116,7 @@ const Dashboard = () => {
       change: '+8.2%', 
       trend: 'up', 
       icon: Target,
-      gradient: 'from-[hsl(320,90%,55%)] to-[hsl(280,85%,60%)]'
+      gradient: 'from-brand-pink to-brand-purple'
     },
   ];
 
@@ -127,63 +127,63 @@ const Dashboard = () => {
       title: 'Neural Strategist',
       description: 'AI-powered content strategy',
       link: '/ai-tools/neural-strategist',
-      gradient: 'from-[hsl(200,100%,50%)] to-[hsl(280,85%,60%)]',
+      gradient: 'from-brand-cyan to-brand-purple',
     },
     {
       icon: Copy,
       title: 'Neural Multiplier',
       description: 'Transform content across platforms',
       link: '/ai-tools/neural-multiplier',
-      gradient: 'from-[hsl(280,85%,60%)] to-[hsl(320,90%,55%)]',
+      gradient: 'from-brand-purple to-brand-pink',
     },
     {
       icon: RefreshCw,
       title: 'Content Transform',
       description: 'Repurpose with AI',
       link: '/ai-tools/content-transform',
-      gradient: 'from-[hsl(320,90%,55%)] to-[hsl(200,100%,50%)]',
+      gradient: 'from-brand-pink to-brand-cyan',
     },
     {
       icon: Bot,
       title: 'Creator Hub',
       description: 'Personalized AI assistant',
       link: '/ai-tools/creator-hub',
-      gradient: 'from-[hsl(200,100%,50%)] to-[hsl(280,85%,60%)]',
+      gradient: 'from-brand-cyan to-brand-purple',
     },
     {
       icon: BarChart3,
       title: 'Trend Analyzer',
       description: 'Discover trending topics',
       link: '/ai-tools/trend-analyzer',
-      gradient: 'from-[hsl(280,85%,60%)] to-[hsl(320,90%,55%)]',
+      gradient: 'from-brand-purple to-brand-pink',
     },
     {
       icon: Zap,
       title: 'Hashtag Generator',
       description: 'High-performing hashtags',
       link: '/ai-tools/hashtag-generator',
-      gradient: 'from-[hsl(200,100%,50%)] to-[hsl(320,90%,55%)]',
+      gradient: 'from-brand-cyan to-brand-pink',
     },
     {
       icon: Clock,
       title: 'Content Calendar',
       description: 'Plan your content strategy',
       link: '/ai-tools/content-calendar',
-      gradient: 'from-[hsl(320,90%,55%)] to-[hsl(280,85%,60%)]',
+      gradient: 'from-brand-pink to-brand-purple',
     },
     {
       icon: Lightbulb,
       title: 'Idea Generator',
       description: 'Unlimited content ideas',
       link: '/ai-tools/idea-generator',
-      gradient: 'from-[hsl(200,100%,50%)] to-[hsl(280,85%,60%)]',
+      gradient: 'from-brand-cyan to-brand-purple',
     },
     {
       icon: Video,
       title: 'Video Studio',
       description: 'AI video generation',
       link: '/ai-tools/video-studio',
-      gradient: 'from-[hsl(280,85%,60%)] to-[hsl(320,90%,55%)]',
+      gradient: 'from-brand-purple to-brand-pink',
     },
     {
       icon: ImageIcon,

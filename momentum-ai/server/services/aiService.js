@@ -15,13 +15,27 @@ class AIService {
     // For cloud: https://api.ollama.ai (requires OLLAMA_API_KEY)
     this.ollamaUrl = process.env.OLLAMA_URL || 'http://localhost:11434';
     this.ollamaApiKey = process.env.OLLAMA_API_KEY;
-    this.defaultModel = process.env.AI_DEFAULT_MODEL || 'llama2'; // Default to Ollama model
+    // Align default model with modern Ollama defaults
+    this.defaultModel = process.env.AI_DEFAULT_MODEL || 'llama3.1:8b-instruct';
     
-    // Initialize Gemini if configured
-    if (this.provider === 'gemini' && this.geminiKey) {
+    // Hybrid mode flags
+    this.hybridMode = String(process.env.HYBRID_MODE || 'false').toLowerCase() === 'true';
+    // Standardize OLLAMA_ROLE and warn on deprecated typo variants
+    if (process.env.OLLABMA_ROLE || process.env.OLLLAMA_ROLE) {
+      logger.warn('Deprecated env var detected: Use OLLAMA_ROLE only. OLLABMA_ROLE/OLLLAMA_ROLE are ignored.');
+    }
+    this.ollamaRole = process.env.OLLAMA_ROLE || 'assistant';
+    this.hybridDefaultFlow = process.env.HYBRID_DEFAULT_FLOW || 'ollama-preprocess->gemini-synthesize';
+
+    // Initialize Gemini if configured (always when key exists to enable hybrid regardless of provider)
+    if (this.geminiKey) {
       const { GoogleGenerativeAI } = require('@google/generative-ai');
       this.genAI = new GoogleGenerativeAI(this.geminiKey);
-      logger.info('AI Service initialized with Gemini');
+      if (this.provider === 'gemini') {
+        logger.info('AI Service initialized with Gemini');
+      } else if (this.hybridMode) {
+        logger.info('AI Service hybrid mode enabled: Gemini client initialized for chaining');
+      }
     }
     
     // Initialize Ollama if configured
@@ -39,7 +53,9 @@ class AIService {
       temperature = 0.7,
       maxTokens = 2048,
       provider = this.provider,
-      jsonMode = false
+      jsonMode = false,
+      signal,
+      timeoutMs = 45000
     } = options;
 
     try {
@@ -47,11 +63,18 @@ class AIService {
       const model = this.validateModel(requestedModel, { fallbackToDefault: true });
       
       if (provider === 'ollama' || this.provider === 'ollama') {
-        return await this.generateWithOllama(prompt, { model, temperature, maxTokens });
+        return await this.generateWithOllama(prompt, { model, temperature, maxTokens, signal });
       } else {
-        return await this.generateWithGemini(prompt, { model, temperature, maxTokens, jsonMode });
+        return await this.generateWithGemini(prompt, { model, temperature, maxTokens, jsonMode, signal, timeoutMs });
       }
     } catch (error) {
+      // Preserve aborts so callers can distinguish
+      if (error.name === 'AbortError') {
+        const abortError = new Error(error.message || 'Operation aborted');
+        abortError.name = 'AbortError';
+        throw abortError;
+      }
+      // Avoid noisy logs on expected aborts
       logger.error('AI generation error:', { error: error.message, stack: error.stack });
       throw new Error(`Failed to generate content: ${error.message}`);
     }
@@ -161,6 +184,148 @@ Response (JSON only, no markdown or additional text):
   }
 
   /**
+   * Generate content using a hybrid flow across providers (e.g., Ollama -> Gemini)
+   * Options:
+   * - useOllamaFor: 'preprocess' | 'ideation' | 'none' (default 'preprocess')
+   * - model: base model hint (defaults to this.defaultModel)
+   * - geminiModel: override Gemini model for the second stage
+   * - ollamaModel: override Ollama model for the first stage
+   * - parallel: boolean (if true, run tasks in parallel and combine)
+   */
+  async generateHybridContent(prompt, options = {}) {
+    const {
+      useOllamaFor = 'preprocess',
+      model = this.defaultModel,
+      geminiModel = 'gemini-1.5-flash-latest',
+      ollamaModel = 'llama3.1:8b-instruct',
+      temperature = 0.7,
+      maxTokens = 2048,
+      parallel: parallelOption,
+      jsonMode = false,
+      signal: externalSignal,
+      timeoutMs = 45000
+    } = options;
+
+    // Preconditions: require at least one provider to be usable
+    const geminiAvailable = !!this.genAI;
+    const ollamaAvailable = !!this.ollamaUrl;
+
+    if (!geminiAvailable && !ollamaAvailable) {
+      throw new Error('No AI providers are configured for hybrid generation');
+    }
+
+    // Determine parallel mode from HYBRID_DEFAULT_FLOW when not explicitly provided
+    const defaultParallel = /parallel/i.test(this.hybridDefaultFlow || '');
+    const parallel = parallelOption ?? defaultParallel;
+
+    // Build an AbortController that we can cancel on timeout or external signal
+    const controller = new AbortController();
+    const { signal } = controller;
+    let timeoutId;
+
+    // Propagate external aborts
+    const onExternalAbort = () => {
+      try { controller.abort(new Error('aborted')); } catch (_) {}
+    };
+    if (externalSignal) {
+      if (externalSignal.aborted) {
+        onExternalAbort();
+      } else {
+        externalSignal.addEventListener('abort', onExternalAbort, { once: true });
+      }
+    }
+
+    // Timeout abort
+    timeoutId = setTimeout(() => {
+      try { controller.abort(new Error('timeout')); } catch (_) {}
+    }, Math.max(1000, timeoutMs));
+
+    const cleanup = () => {
+      clearTimeout(timeoutId);
+      if (externalSignal) {
+        externalSignal.removeEventListener('abort', onExternalAbort);
+      }
+    };
+
+    const raceWithAbort = async (fn) => {
+      if (signal.aborted) throw Object.assign(new Error('Operation aborted'), { name: 'AbortError' });
+      try {
+        const res = await fn();
+        if (signal.aborted) throw Object.assign(new Error('Operation aborted'), { name: 'AbortError' });
+        return res;
+      } finally {
+        // do not cleanup here; caller will cleanup after all stages
+      }
+    };
+
+    try {
+      // If parallel ideation/fact-checking
+      if (parallel && geminiAvailable && ollamaAvailable) {
+        const [ollamaOut, geminiOut] = await Promise.all([
+          raceWithAbort(() => this.generateWithOllama(prompt, { model: ollamaModel || model, temperature, maxTokens, signal })),
+          raceWithAbort(async () => {
+            // Gemini SDK has no AbortSignal; emulate with periodic checks
+            if (signal.aborted) throw Object.assign(new Error('Operation aborted'), { name: 'AbortError' });
+            const result = await this.generateWithGemini(prompt, { model: geminiModel, temperature, maxTokens, jsonMode, signal, timeoutMs });
+            if (signal.aborted) throw Object.assign(new Error('Operation aborted'), { name: 'AbortError' });
+            return result;
+          })
+        ]);
+
+        // Simple merge strategy: provide both with attribution
+        return `Ollama draft:\n${ollamaOut}\n\nGemini draft:\n${geminiOut}\n\nSynthesis:\n${geminiOut}`;
+      }
+
+      // Default sequential chaining
+      let context = prompt;
+
+      // Stage 1: optionally run Ollama for preprocessing/ideation if available
+      if (useOllamaFor !== 'none' && ollamaAvailable) {
+        try {
+          const ollamaResult = await raceWithAbort(() => this.generateWithOllama(prompt, {
+            model: ollamaModel || model,
+            maxTokens: Math.min(512, maxTokens),
+            temperature: Math.min(0.9, Math.max(0.1, temperature))
+          , signal }));
+          const role = this.ollamaRole || 'assistant';
+          context = `${prompt}\n\nPreprocessed by Ollama (${role}):\n${ollamaResult}`;
+        } catch (e) {
+          logger.warn(`Hybrid: Ollama stage failed, continuing with single-provider flow: ${e.message}`);
+          // If Gemini is available, continue; else rethrow
+          if (!geminiAvailable) throw e;
+        }
+      }
+
+      // Stage 2: Gemini synthesis if available
+      if (geminiAvailable) {
+        const result = await raceWithAbort(async () => {
+          // Wrap Gemini call with abort checks
+          if (signal.aborted) throw Object.assign(new Error('Operation aborted'), { name: 'AbortError' });
+          const out = await this.generateWithGemini(context, { model: geminiModel, temperature, maxTokens, jsonMode, signal, timeoutMs });
+          if (signal.aborted) throw Object.assign(new Error('Operation aborted'), { name: 'AbortError' });
+          return out;
+        });
+        return result;
+      }
+
+      // Fallback: only Ollama available
+      return await raceWithAbort(() => this.generateWithOllama(context, { model: ollamaModel || model, temperature, maxTokens, signal }));
+    } catch (error) {
+      if (error.name === 'AbortError') {
+        const abortError = new Error('Operation aborted');
+        abortError.name = 'AbortError';
+        throw abortError;
+      }
+      logger.error('Hybrid generation failed:', { message: error.message });
+      // Fallback to single provider logic
+      return this.generateContent(prompt, { model, temperature, maxTokens, jsonMode, signal, timeoutMs });
+    }
+    finally {
+      cleanup();
+    }
+  }
+
+  /**
    * Generate content with streaming
    */
   async *generateStreamingContent(prompt, options = {}) {
@@ -207,7 +372,9 @@ Response (JSON only, no markdown or additional text):
       model = 'gemini-1.5-flash-latest',
       temperature = 0.7,
       maxTokens = 2048,
-      jsonMode = false
+      jsonMode = false,
+      signal,
+      timeoutMs = 45000
     } = options;
 
     const genModel = this.genAI.getGenerativeModel({
@@ -219,7 +386,26 @@ Response (JSON only, no markdown or additional text):
       },
     });
 
-    const result = await genModel.generateContent(prompt);
+    // Pre-abort check
+    if (signal?.aborted) {
+      const abortError = new Error('Operation aborted');
+      abortError.name = 'AbortError';
+      throw abortError;
+    }
+
+    // Execute with timeout and post-abort checks
+    const run = () => genModel.generateContent(prompt);
+    const withTimeout = new Promise((resolve, reject) => {
+      const t = setTimeout(() => reject(Object.assign(new Error('Gemini request timed out'), { name: 'AbortError' })), Math.max(1000, timeoutMs));
+      run().then(resolve, reject).finally(() => clearTimeout(t));
+    });
+
+    const result = await withTimeout;
+    if (signal?.aborted) {
+      const abortError = new Error('Operation aborted');
+      abortError.name = 'AbortError';
+      throw abortError;
+    }
     const response = await result.response;
     return response.text();
   }
@@ -281,9 +467,10 @@ Response (JSON only, no markdown or additional text):
    */
   async generateWithOllama(prompt, options = {}) {
     const {
-      model = 'llama2',
+      model = this.defaultModel,
       temperature = 0.7,
-      maxTokens = 2048
+      maxTokens = 2048,
+      signal
     } = options;
 
     // Use node-fetch or built-in fetch (Node 18+)
@@ -304,7 +491,8 @@ Response (JSON only, no markdown or additional text):
             temperature,
             num_predict: maxTokens
           }
-        })
+        }),
+        signal
       });
 
       // Validate content type
@@ -347,13 +535,13 @@ Response (JSON only, no markdown or additional text):
    */
   async *streamWithOllama(prompt, options = {}) {
     const {
-      model = 'llama2',
+      model = this.defaultModel,
       temperature = 0.7,
       maxTokens = 2048,
       signal
     } = options;
 
-    const streamFormat = process.env.OLLAMA_STREAM_FORMAT || 'jsonl';
+    const streamFormat = (process.env.OLLAMA_STREAM_FORMAT || 'jsonl').toLowerCase();
 
     // Use node-fetch for streaming
     const fetch = require('node-fetch');
@@ -404,6 +592,13 @@ Response (JSON only, no markdown or additional text):
           throw abortError;
         }
         
+        if (streamFormat === 'text') {
+          // Yield raw text chunks
+          yield chunk.toString();
+          continue;
+        }
+
+        // Default: jsonl
         buffer += chunk.toString();
         const lines = buffer.split('\n');
         buffer = lines.pop(); // Keep incomplete line in buffer
@@ -437,13 +632,17 @@ Response (JSON only, no markdown or additional text):
 
       // Process remaining buffer
       if (buffer.trim()) {
-        try {
-          const data = JSON.parse(buffer);
-          if (data.response) {
-            yield data.response;
+        if (streamFormat === 'text') {
+          yield buffer;
+        } else {
+          try {
+            const data = JSON.parse(buffer);
+            if (data.response) {
+              yield data.response;
+            }
+          } catch (e) {
+            logger.warn(`Failed to parse final buffer from Ollama: ${e.message}`);
           }
-        } catch (e) {
-          logger.warn(`Failed to parse final buffer from Ollama: ${e.message}`);
         }
       }
     } catch (error) {
@@ -490,24 +689,32 @@ Response (JSON only, no markdown or additional text):
   /**
    * Get available models for the current provider
    */
-  getAvailableModels() {
+  getAvailableModels(options = {}) {
+    const { includeHybrid = false } = options;
     if (this.provider === 'ollama') {
-      return [
-        'llama2',
-        'llama2:13b',
-        'llama2:70b',
-        'mistral',
-        'mixtral',
-        'codellama',
-        'neural-chat',
-        'starling-lm'
+      const models = [
+        // Llama 3.1 family
+        'llama3.1:8b-instruct',
+        'llama3.1:70b-instruct',
+        'llama3.1:405b-instruct',
+        // Mistral/Mixtral
+        'mistral:7b-instruct',
+        'mixtral:8x7b-instruct',
+        // Coding and others
+        'codellama:7b-instruct',
+        'phi3:3.8b-mini-instruct',
+        'qwen2:7b-instruct'
       ];
+      if (!includeHybrid) return models;
+      return { provider: 'ollama', models, hybridSupported: !!this.genAI };
     } else {
-      return [
+      const models = [
         'gemini-1.5-flash-latest',
         'gemini-1.5-pro-latest',
         'gemini-pro-vision'
       ];
+      if (!includeHybrid) return models;
+      return { provider: 'gemini', models, hybridSupported: !!this.ollamaUrl };
     }
   }
 
@@ -550,16 +757,16 @@ Response (JSON only, no markdown or additional text):
     return {
       ollama: {
         models: [
-          'llama2',
-          'llama2:13b',
-          'llama2:70b',
-          'mistral',
-          'mixtral',
-          'codellama',
-          'neural-chat',
-          'starling-lm'
+          'llama3.1:8b-instruct',
+          'llama3.1:70b-instruct',
+          'llama3.1:405b-instruct',
+          'mistral:7b-instruct',
+          'mixtral:8x7b-instruct',
+          'codellama:7b-instruct',
+          'phi3:3.8b-mini-instruct',
+          'qwen2:7b-instruct'
         ],
-        default: 'llama2',
+        default: 'llama3.1:8b-instruct',
         supportsStreaming: true,
         supportsImageAnalysis: false,
       },

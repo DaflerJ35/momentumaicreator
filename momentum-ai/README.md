@@ -1109,13 +1109,60 @@ See the [Quick Start](#-quick-start) section for detailed setup instructions.
 4. Check for rate limiting (free tier has limits)
 5. Verify API key has correct permissions
 
+#### Windows PowerShell setup (conda, ampersand, env vars)
+
+If you work in Windows PowerShell and see errors like "Failed to activate conda environment", "Ampersand character is not allowed", or "The term 'export' is not recognized":
+
+1) Initialize Conda for PowerShell (run once in Anaconda Prompt as Administrator)
+
+   C3.bat init powershell
+
+   Then open a new PowerShell window and activate your env:
+
+   conda activate <your-env-name>
+
+2) Ampersand (&) errors
+   - Typically you don’t need & to run commands in PowerShell
+   - If a tool must receive a literal &: "& your-command"
+
+3) Bash → PowerShell quick mapping
+   - export VAR=value → $env:VAR = "value"
+   - source script.bash → . .\script.ps1
+   - rm -rf node_modules → Remove-Item -Recurse -Force node_modules
+   - rm -rf .vite → Remove-Item -Recurse -Force .vite
+
+4) Clean caches and reinstall (PowerShell)
+
+   if (Test-Path node_modules) { Remove-Item -Recurse -Force node_modules }
+   if (Test-Path .vite) { Remove-Item -Recurse -Force .vite }
+   pnpm install
+
+See the root-level POWERSHELL_SETUP.md for a concise reference.
+
 #### Build Fails
 
 **Problem**: `npm run build` fails with errors.
 
 **Solutions**:
-1. Delete `node_modules` and reinstall: `rm -rf node_modules && npm install`
-2. Clear Vite cache: `rm -rf node_modules/.vite`
+1. Delete `node_modules` and reinstall:
+   - Windows (PowerShell):
+     ```powershell
+     if (Test-Path node_modules) { Remove-Item -Recurse -Force node_modules }
+     npm install
+     ```
+   - macOS/Linux (bash):
+     ```bash
+     rm -rf node_modules && npm install
+     ```
+2. Clear Vite cache:
+   - Windows (PowerShell):
+     ```powershell
+     if (Test-Path .\.vite) { Remove-Item -Recurse -Force .\.vite }
+     ```
+   - macOS/Linux (bash):
+     ```bash
+     rm -rf node_modules/.vite
+     ```
 3. Ensure Node.js version is 18 or higher: `node --version`
 4. Check for TypeScript errors if using TS
 5. Verify all dependencies are installed
@@ -1128,7 +1175,16 @@ See the [Quick Start](#-quick-start) section for detailed setup instructions.
 1. Check if port 5173 is already in use
 2. Kill existing processes: `npx kill-port 5173`
 3. Clear npm cache: `npm cache clean --force`
-4. Reinstall dependencies: `rm -rf node_modules && npm install`
+4. Reinstall dependencies:
+   - Windows (PowerShell):
+     ```powershell
+     if (Test-Path node_modules) { Remove-Item -Recurse -Force node_modules }
+     npm install
+     ```
+   - macOS/Linux (bash):
+     ```bash
+     rm -rf node_modules && npm install
+     ```
 5. Check `.env` file for syntax errors
 
 #### CORS Errors in Production
