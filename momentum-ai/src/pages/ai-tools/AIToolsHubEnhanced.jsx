@@ -6,6 +6,7 @@ import { Button } from '../../components/ui/button';
 import { Brain, Sparkles, Wand2, Copy, BarChart2, Zap, Clock, Lightbulb, Bot, Video, RefreshCw, ImageIcon, Mic, Target, Search, Archive } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { ShimmerCard, Floating, MagneticButton, PulseGlow } from '../../components/ui/micro-interactions';
+import { useAI } from '../../contexts/AIContext';
 
 const tools = [
   {
@@ -279,6 +280,24 @@ const AIToolsHubEnhanced = () => {
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
   const [hoveredCategory, setHoveredCategory] = useState(null);
+  const { modelSettings, updateModelSettings } = useAI();
+
+  const handleProviderChange = (event) => {
+    const value = event.target.value || null;
+    updateModelSettings({ provider: value });
+  };
+
+  const handleKbListChange = (event) => {
+    const raw = event.target.value || '';
+    const kbList = raw
+      .split(',')
+      .map((id) => id.trim())
+      .filter(Boolean);
+    updateModelSettings({ kbList });
+  };
+
+  const currentProvider = modelSettings?.provider || '';
+  const kbInputValue = (modelSettings?.kbList || []).join(', ');
 
   const filteredTools = tools.filter(tool => 
     tool.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -372,6 +391,44 @@ const AIToolsHubEnhanced = () => {
             )}
           </div>
         </MagneticButton>
+      </motion.div>
+
+      {/* AI Provider / Knowledge Base selector */}
+      <motion.div
+        className="mb-8 grid gap-4 md:grid-cols-2"
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5, delay: 0.5 }}
+      >
+        <div className="glass-card rounded-xl p-4 flex flex-col gap-2">
+          <span className="text-sm font-medium text-slate-200">AI Provider</span>
+          <select
+            value={currentProvider}
+            onChange={handleProviderChange}
+            className="input-premium bg-slate-900/60 border border-slate-700 text-sm"
+          >
+            <option value="">Auto (server default)</option>
+            <option value="ollama">Ollama</option>
+            <option value="gemini">Gemini</option>
+            <option value="flowith">Flowith / Neo</option>
+          </select>
+          <p className="text-xs text-slate-400">
+            Choose which backend provider powers your AI tools.
+          </p>
+        </div>
+        <div className="glass-card rounded-xl p-4 flex flex-col gap-2">
+          <span className="text-sm font-medium text-slate-200">Flowith Knowledge Bases</span>
+          <input
+            type="text"
+            value={kbInputValue}
+            onChange={handleKbListChange}
+            className="input-premium text-sm"
+            placeholder="kb_123, kb_456 (optional)"
+          />
+          <p className="text-xs text-slate-400">
+            Comma-separated Flowith/Neo KB IDs used when Flowith is selected.
+          </p>
+        </div>
       </motion.div>
 
       {/* Tools Grid with Stagger Animation */}

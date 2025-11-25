@@ -64,3 +64,4 @@ env/
 # Cursor
 .cursorignore
 .cursorindexingignore
+.vercel

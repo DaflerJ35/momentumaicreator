@@ -2,7 +2,7 @@ import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { Suspense, useState, useEffect } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { onAuthStateChanged } from 'firebase/auth';
-import { auth } from './lib/firebase';
+import { auth, database, ref, get } from './lib/firebase';
 import { routes } from './config/routes';
 import Navbar from './components/Navbar';
 import Sidebar from './components/Sidebar';
@@ -81,10 +81,8 @@ function AppContent() {
         // Check if user needs onboarding
         if (currentUser) {
           try {
-            const { database: db } = await import('./lib/firebase');
-            if (db) {
-              const { ref, get } = await import('firebase/database');
-              const userRef = ref(db, `users/${currentUser.uid}/onboarding`);
+            if (database) {
+              const userRef = ref(database, `users/${currentUser.uid}/onboarding`);
               const snapshot = await get(userRef);
               
               if (!snapshot.exists() || !snapshot.val()?.completed) {

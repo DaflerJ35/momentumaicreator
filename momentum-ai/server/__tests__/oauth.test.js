@@ -1,3 +1,10 @@
+/**
+ * @jest-environment node
+ */
+
+process.env.NODE_ENV = 'test';
+process.env.OAUTH_STATE_SECRET = 'test_state_secret';
+
 const { generatePKCE, generateStateId, verifyStateId } = require('../utils/oauthState');
 
 describe('OAuth State Management', () => {

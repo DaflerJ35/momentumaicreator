@@ -1,4 +1,5 @@
 import { lazy } from 'react';
+import NotFound from '../pages/NotFound';
 import {
   Home,
   BarChart3,
@@ -39,7 +40,6 @@ const SettingsPage = lazy(() => import('../pages/account/Settings'));
 const Billing = lazy(() => import('../pages/account/Billing'));
 const Pricing = lazy(() => import('../pages/pricing/Pricing'));
 const Contact = lazy(() => import('../pages/general/Contact'));
-const NotFound = lazy(() => import('../pages/NotFound'));
 const SignIn = lazy(() => import('../pages/auth/SignIn'));
 const SignUp = lazy(() => import('../pages/auth/SignUp'));
 

@@ -1,3 +1,7 @@
+/**
+ * @jest-environment node
+ */
+
 const request = require('supertest');
 
 // Mock environment variables
@@ -7,6 +11,10 @@ process.env.FRONTEND_URL = 'http://localhost:5173';
 process.env.AI_PROVIDER = 'ollama';
 process.env.OLLAMA_URL = 'http://localhost:11434';
 process.env.AI_DEFAULT_MODEL = 'llama2';
+process.env.TOKEN_ENCRYPTION_KEY = '1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef';
+process.env.OAUTH_STATE_SECRET = 'test_state_secret';
+process.env.FIREBASE_PROJECT_ID = 'test-project';
+process.env.FREE_AI_MODE = 'false';
 
 // Mock Firebase Admin
 const mockVerifyIdToken = jest.fn();
@@ -26,6 +34,13 @@ jest.mock('../services/aiService', () => {
     defaultModel: 'llama2',
     getAvailableModels: jest.fn(() => ['llama2', 'mistral']),
     generateContent: jest.fn(async () => 'Generated content'),
+    generateStructuredContent: jest.fn(async () => ({ json: true })),
+    generateCollaborativeContent: jest.fn(async () => ({
+      final: 'Collaborative mock content',
+      steps: [],
+      meta: null,
+    })),
+    analyzeImage: jest.fn(async () => 'analysis'),
     constructor: {
       getProviderModelMap: jest.fn(() => ({
         ollama: {
@@ -102,6 +117,10 @@ describe('AI Routes Authentication', () => {
       mockVerifyIdToken.mockResolvedValue({
         uid: 'test-uid',
         email: 'test@example.com',
+        email_verified: true,
+        aud: process.env.FIREBASE_PROJECT_ID,
+        iss: `https://securetoken.googleapis.com/v1/projects/${process.env.FIREBASE_PROJECT_ID}`,
+        exp: Math.floor(Date.now() / 1000) + 3600,
       });
 
       const response = await request(app)

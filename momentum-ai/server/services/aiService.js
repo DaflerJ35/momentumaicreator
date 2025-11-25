@@ -1,23 +1,61 @@
 /**
- * AI Service - Supports both Google Gemini and Ollama
+ * AI Service - Supports Google Gemini, Ollama, and Flowith/Neo
  * Handles all AI operations server-side for better security and control
  */
 
 const logger = require('../utils/logger');
 const Ajv = require('ajv');
+const fetch = require('node-fetch');
+
+const DEFAULT_OLLAMA_MODELS = [
+  'llama3.1:8b-instruct',
+  'mistral:7b-instruct',
+  'mixtral:8x7b-instruct',
+  'codellama:7b-instruct'
+];
 
 class AIService {
   constructor() {
-    this.provider = process.env.AI_PROVIDER || 'ollama'; // 'gemini' or 'ollama' - default to ollama for free usage
+    this.provider = process.env.AI_PROVIDER || 'ollama'; // 'gemini', 'ollama', or 'flowith' - default to ollama for free usage
     this.geminiKey = process.env.GEMINI_API_KEY;
     // Default to local Ollama (free) - override with OLLAMA_URL env var for cloud or custom server
     // For local: http://localhost:11434 (requires Ollama installed locally)
     // For cloud: https://api.ollama.ai (requires OLLAMA_API_KEY)
-    this.ollamaUrl = process.env.OLLAMA_URL || 'http://localhost:11434';
+    // Support both OLLAMA_URL (primary) and OLLAMA_API_URL (legacy/docs)
+    this.ollamaUrl = process.env.OLLAMA_URL || process.env.OLLAMA_API_URL || 'http://localhost:11434';
     this.ollamaApiKey = process.env.OLLAMA_API_KEY;
-    // Align default model with modern Ollama defaults
+
+    // Flowith / Neo Knowledge API configuration
+    // FLOWITH_API_URL is expected to be the full Knowledge Retrieval endpoint base
+    this.flowithBaseUrl = process.env.FLOWITH_API_URL || process.env.FLOWITH_BASE_URL || '';
+    this.flowithApiKey = process.env.FLOWITH_API_KEY || '';
+    this.flowithDefaultKb = process.env.FLOWITH_DEFAULT_KB || '';
+    this.flowithDefaultModel = process.env.FLOWITH_DEFAULT_MODEL || process.env.AI_DEFAULT_MODEL || 'flowith-neo';
+
+    // Align default model with modern Ollama defaults (for ollama provider)
     this.defaultModel = process.env.AI_DEFAULT_MODEL || 'llama3.1:8b-instruct';
-    
+    this.requiredModels = (process.env.OLLAMA_REQUIRED_MODELS || DEFAULT_OLLAMA_MODELS.join(','))
+      .split(',')
+      .map(model => model.trim())
+      .filter(Boolean);
+    if (this.requiredModels.length < 3) {
+      for (const fallbackModel of DEFAULT_OLLAMA_MODELS) {
+        if (this.requiredModels.length >= 3) break;
+        if (!this.requiredModels.includes(fallbackModel)) {
+          this.requiredModels.push(fallbackModel);
+        }
+      }
+    }
+    this.collaborativeModels = (process.env.OLLAMA_COLLAB_MODELS || '')
+      .split(',')
+      .map(model => model.trim())
+      .filter(Boolean);
+    if (!this.collaborativeModels.length) {
+      this.collaborativeModels = [...this.requiredModels];
+    }
+    this.preloadPromise = null;
+    this.preloadComplete = false;
+
     // Hybrid mode flags
     this.hybridMode = String(process.env.HYBRID_MODE || 'false').toLowerCase() === 'true';
     // Standardize OLLAMA_ROLE and warn on deprecated typo variants
@@ -37,10 +75,13 @@ class AIService {
         logger.info('AI Service hybrid mode enabled: Gemini client initialized for chaining');
       }
     }
-    
+
     // Initialize Ollama if configured
     if (this.provider === 'ollama' && this.ollamaUrl) {
       logger.info(`AI Service initialized with Ollama at ${this.ollamaUrl}`);
+      this.preloadPromise = this.preloadOllamaModels().catch(error => {
+        logger.warn('Failed to preload Ollama models', { error: error.message });
+      });
     }
   }
 
@@ -55,18 +96,35 @@ class AIService {
       provider = this.provider,
       jsonMode = false,
       signal,
-      timeoutMs = 45000
+      timeoutMs = 45000,
+      messages,
+      kbList,
     } = options;
 
     try {
       // Validate and normalize model name
       const model = this.validateModel(requestedModel, { fallbackToDefault: true });
-      
-      if (provider === 'ollama' || this.provider === 'ollama') {
-        return await this.generateWithOllama(prompt, { model, temperature, maxTokens, signal });
-      } else {
-        return await this.generateWithGemini(prompt, { model, temperature, maxTokens, jsonMode, signal, timeoutMs });
+      const providerToUse = provider || this.provider;
+
+      if (providerToUse === 'flowith') {
+        return await this.generateWithFlowith(prompt, {
+          model,
+          temperature,
+          maxTokens,
+          messages,
+          kbList,
+          jsonMode,
+          signal,
+          timeoutMs,
+        });
       }
+
+      if (providerToUse === 'ollama') {
+        return await this.generateWithOllama(prompt, { model, temperature, maxTokens, signal });
+      }
+
+      // Default to Gemini when provider is not Ollama or Flowith
+      return await this.generateWithGemini(prompt, { model, temperature, maxTokens, jsonMode, signal, timeoutMs });
     } catch (error) {
       // Preserve aborts so callers can distinguish
       if (error.name === 'AbortError') {
@@ -102,7 +160,7 @@ Response (JSON only, no markdown or additional text):
 
     try {
       let parsed;
-      
+
       // First, try parsing the full response as JSON
       try {
         parsed = JSON.parse(response.trim());
@@ -114,7 +172,7 @@ Response (JSON only, no markdown or additional text):
         // If direct parse fails, try extracting from markdown code blocks
         const jsonMatch = response.match(/```(?:json)?\n([\s\S]*?)\n```/) || [null, response];
         const jsonString = jsonMatch[1] || jsonMatch[0] || response;
-        
+
         try {
           parsed = JSON.parse(jsonString.trim());
           if (typeof parsed !== 'object' || parsed === null) {
@@ -123,10 +181,10 @@ Response (JSON only, no markdown or additional text):
         } catch (extractParseError) {
           // Try to repair common JSON issues
           let repaired = jsonString.trim();
-          
+
           // Remove markdown code block markers if still present
           repaired = repaired.replace(/^```(?:json)?\s*\n?/gm, '').replace(/\n?```\s*$/gm, '');
-          
+
           // Try parsing repaired string
           try {
             parsed = JSON.parse(repaired);
@@ -143,7 +201,7 @@ Response (JSON only, no markdown or additional text):
                 repair: repairError.message
               }
             });
-            
+
             // Provide structured error for UI
             const parseError = new Error(`Failed to parse AI response as valid JSON. The response may be malformed. ${repairError.message}`);
             parseError.name = 'JSONParseError';
@@ -158,20 +216,20 @@ Response (JSON only, no markdown or additional text):
         const ajv = new Ajv();
         const validate = ajv.compile(schema);
         const valid = validate(parsed);
-        
+
         if (!valid) {
           const errors = validate.errors || [];
           const errorMessages = errors.map(err => {
             const path = err.instancePath || 'root';
             return `${path}: ${err.message}`;
           }).join('; ');
-          
+
           const validationError = new Error(`JSON Schema validation failed: ${errorMessages}`);
           validationError.name = 'SchemaValidationError';
           throw validationError;
         }
       }
-      
+
       return parsed;
     } catch (error) {
       logger.error('Error parsing JSON response:', error);
@@ -203,8 +261,27 @@ Response (JSON only, no markdown or additional text):
       parallel: parallelOption,
       jsonMode = false,
       signal: externalSignal,
-      timeoutMs = 45000
+      timeoutMs = 45000,
+      provider: providedProvider,
+      messages,
+      kbList,
     } = options;
+
+    const effectiveProvider = providedProvider || this.provider;
+
+    // If Flowith is the active provider, treat hybrid requests as single-provider
+    if (effectiveProvider === 'flowith') {
+      return this.generateWithFlowith(prompt, {
+        model,
+        temperature,
+        maxTokens,
+        messages,
+        kbList,
+        jsonMode,
+        signal: externalSignal,
+        timeoutMs,
+      });
+    }
 
     // Preconditions: require at least one provider to be usable
     const geminiAvailable = !!this.genAI;
@@ -225,7 +302,7 @@ Response (JSON only, no markdown or additional text):
 
     // Propagate external aborts
     const onExternalAbort = () => {
-      try { controller.abort(new Error('aborted')); } catch (_) {}
+      try { controller.abort(new Error('aborted')); } catch (_) { }
     };
     if (externalSignal) {
       if (externalSignal.aborted) {
@@ -237,7 +314,7 @@ Response (JSON only, no markdown or additional text):
 
     // Timeout abort
     timeoutId = setTimeout(() => {
-      try { controller.abort(new Error('timeout')); } catch (_) {}
+      try { controller.abort(new Error('timeout')); } catch (_) { }
     }, Math.max(1000, timeoutMs));
 
     const cleanup = () => {
@@ -286,7 +363,8 @@ Response (JSON only, no markdown or additional text):
             model: ollamaModel || model,
             maxTokens: Math.min(512, maxTokens),
             temperature: Math.min(0.9, Math.max(0.1, temperature))
-          , signal }));
+            , signal
+          }));
           const role = this.ollamaRole || 'assistant';
           context = `${prompt}\n\nPreprocessed by Ollama (${role}):\n${ollamaResult}`;
         } catch (e) {
@@ -335,14 +413,27 @@ Response (JSON only, no markdown or additional text):
       maxTokens = 2048,
       provider = this.provider,
       jsonMode = false,
-      signal
+      signal,
+      messages,
+      kbList,
     } = options;
 
     try {
       // Validate and normalize model name
       const model = this.validateModel(requestedModel, { fallbackToDefault: true });
-      
-      if (provider === 'ollama' || this.provider === 'ollama') {
+      const providerToUse = provider || this.provider;
+
+      if (providerToUse === 'flowith') {
+        yield* this.streamWithFlowith(prompt, {
+          model,
+          temperature,
+          maxTokens,
+          messages,
+          kbList,
+          signal,
+          jsonMode,
+        });
+      } else if (providerToUse === 'ollama') {
         yield* this.streamWithOllama(prompt, { model, temperature, maxTokens, signal });
       } else {
         yield* this.streamWithGemini(prompt, { model, temperature, maxTokens, jsonMode, signal });
@@ -357,6 +448,162 @@ Response (JSON only, no markdown or additional text):
         logger.error('AI streaming error:', { error: error.message });
       }
       throw new Error(`Failed to stream content: ${error.message}`);
+    }
+  }
+
+  /**
+   * Generate with Flowith / Neo Knowledge API (non-streaming)
+   * The FLOWITH_API_URL env var should point at the Knowledge Retrieval endpoint.
+   * Request format:
+   * - messages: [{ role, content }, ...]
+   * - model: string
+   * - kb_list: [kbId, ...]
+   * - stream: false
+   */
+  async generateWithFlowith(prompt, options = {}) {
+    if (!this.flowithBaseUrl || !this.flowithApiKey) {
+      throw new Error('Flowith API not configured');
+    }
+
+    const {
+      model = this.flowithDefaultModel,
+      temperature = 0.7,
+      maxTokens = 2048, // Reserved for future use if Flowith supports it
+      messages,
+      kbList,
+      jsonMode = false,
+      signal,
+      timeoutMs = 45000,
+    } = options;
+
+    // Build conversation messages
+    let payloadMessages;
+    if (Array.isArray(messages) && messages.length > 0) {
+      payloadMessages = messages
+        .filter(m => m && typeof m.content === 'string')
+        .map(m => ({
+          role: typeof m.role === 'string' ? m.role : 'user',
+          content: String(m.content).replace(/\0/g, '').trim(),
+        }))
+        .filter(m => m.content.length > 0);
+    } else {
+      const safePrompt = (prompt || '').toString().replace(/\0/g, '').trim();
+      if (!safePrompt) {
+        throw new Error('Prompt is required for Flowith requests');
+      }
+      payloadMessages = [{ role: 'user', content: safePrompt }];
+    }
+
+    // Normalize knowledge base list
+    let kb_list = Array.isArray(kbList)
+      ? kbList.map(id => String(id).trim()).filter(Boolean)
+      : [];
+    if (!kb_list.length && this.flowithDefaultKb) {
+      kb_list = [this.flowithDefaultKb];
+    }
+
+    // Pre-abort check
+    if (signal?.aborted) {
+      const abortError = new Error('Operation aborted');
+      abortError.name = 'AbortError';
+      throw abortError;
+    }
+
+    const body = {
+      messages: payloadMessages,
+      model,
+      stream: false,
+      kb_list: kb_list.length ? kb_list : undefined,
+      temperature,
+      // Allow callers to request JSON-like responses if desired
+      response_format: jsonMode ? 'json' : 'text',
+      max_tokens: maxTokens,
+    };
+
+    const run = async () => {
+      const response = await fetch(this.flowithBaseUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${this.flowithApiKey}`,
+        },
+        body: JSON.stringify(body),
+        // We cannot combine an external AbortSignal with our own timeout signal,
+        // so we rely on manual timeout handling below.
+      });
+
+      const contentType = response.headers.get('content-type') || '';
+      const isJson = contentType.includes('application/json');
+
+      if (!response.ok) {
+        const errorPayload = isJson ? await response.json().catch(() => null) : await response.text().catch(() => '');
+        const errorMessage =
+          (errorPayload && (errorPayload.error || errorPayload.message)) ||
+          `Flowith API error (${response.status})`;
+        throw new Error(errorMessage);
+      }
+
+      if (!isJson) {
+        const text = await response.text();
+        return text;
+      }
+
+      const data = await response.json();
+
+      // Try to extract a primary text field from Flowith response
+      if (typeof data === 'string') {
+        return data;
+      }
+
+      if (data && typeof data === 'object') {
+        if (typeof data.content === 'string') {
+          return data.content;
+        }
+        if (typeof data.answer === 'string') {
+          return data.answer;
+        }
+        if (Array.isArray(data.messages) && data.messages.length > 0) {
+          const last = data.messages[data.messages.length - 1];
+          if (last && typeof last.content === 'string') {
+            return last.content;
+          }
+        }
+        if (data.result && typeof data.result === 'string') {
+          return data.result;
+        }
+      }
+
+      // Fallback: return JSON stringified payload
+      return JSON.stringify(data);
+    };
+
+    // Execute with timeout handling similar to Gemini
+    const withTimeout = new Promise((resolve, reject) => {
+      const t = setTimeout(
+        () => reject(Object.assign(new Error('Flowith request timed out'), { name: 'AbortError' })),
+        Math.max(1000, timeoutMs)
+      );
+      run()
+        .then(resolve, reject)
+        .finally(() => clearTimeout(t));
+    });
+
+    try {
+      const result = await withTimeout;
+      if (signal?.aborted) {
+        const abortError = new Error('Operation aborted');
+        abortError.name = 'AbortError';
+        throw abortError;
+      }
+      return result;
+    } catch (error) {
+      if (error.name === 'AbortError') {
+        const abortError = new Error(error.message || 'Operation aborted');
+        abortError.name = 'AbortError';
+        throw abortError;
+      }
+      logger.error('Flowith generation error:', { error: error.message });
+      throw new Error(`Failed to generate content with Flowith: ${error.message}`);
     }
   }
 
@@ -442,7 +689,7 @@ Response (JSON only, no markdown or additional text):
     });
 
     const result = await genModel.generateContentStream(prompt);
-    
+
     for await (const chunk of result.stream) {
       // Check if abort signal was triggered
       if (signal?.aborted) {
@@ -473,9 +720,8 @@ Response (JSON only, no markdown or additional text):
       signal
     } = options;
 
-    // Use node-fetch or built-in fetch (Node 18+)
-    const fetch = require('node-fetch');
-    
+    await this.ensureModelsReady();
+
     try {
       const response = await fetch(`${this.ollamaUrl}/api/generate`, {
         method: 'POST',
@@ -507,16 +753,16 @@ Response (JSON only, no markdown or additional text):
       }
 
       const data = await response.json();
-      
+
       // Validate response structure
       if (!data || typeof data !== 'object') {
         throw new Error('Invalid response format from Ollama API: expected JSON object');
       }
-      
+
       if (!data.response && data.done !== true) {
         logger.warn('Ollama response missing "response" field', { data });
       }
-      
+
       return data.response || '';
     } catch (error) {
       if (error.message.includes('fetch failed') || error.message.includes('ECONNREFUSED')) {
@@ -543,9 +789,8 @@ Response (JSON only, no markdown or additional text):
 
     const streamFormat = (process.env.OLLAMA_STREAM_FORMAT || 'jsonl').toLowerCase();
 
-    // Use node-fetch for streaming
-    const fetch = require('node-fetch');
-    
+    await this.ensureModelsReady();
+
     try {
       const response = await fetch(`${this.ollamaUrl}/api/generate`, {
         method: 'POST',
@@ -591,7 +836,7 @@ Response (JSON only, no markdown or additional text):
           abortError.name = 'AbortError';
           throw abortError;
         }
-        
+
         if (streamFormat === 'text') {
           // Yield raw text chunks
           yield chunk.toString();
@@ -608,17 +853,17 @@ Response (JSON only, no markdown or additional text):
             lineCount++;
             try {
               const data = JSON.parse(line);
-              
+
               // Validate response structure
               if (typeof data !== 'object') {
                 logger.warn(`Invalid JSON line from Ollama (line ${lineCount}): expected object`, { line });
                 continue;
               }
-              
+
               if (data.response) {
                 yield data.response;
               }
-              
+
               if (data.done) {
                 return; // Stream complete
               }
@@ -656,6 +901,179 @@ Response (JSON only, no markdown or additional text):
         throw new Error(`Cannot connect to Ollama at ${this.ollamaUrl}. Ensure Ollama is running and OLLAMA_URL is correct.`);
       }
       throw error;
+    }
+  }
+
+  /**
+   * Helper to ensure models are ready (if needed)
+   */
+  async ensureModelsReady() {
+    if (this.preloadPromise) {
+      await this.preloadPromise;
+    }
+  }
+
+  /**
+   * Preload Ollama models to ensure they are loaded in memory
+   */
+  async preloadOllamaModels() {
+    if (this.preloadComplete) return;
+
+    try {
+      // Simple check to see if Ollama is reachable
+      const response = await fetch(`${this.ollamaUrl}/api/tags`);
+      if (response.ok) {
+        this.preloadComplete = true;
+      }
+    } catch (error) {
+      // Don't throw here, just log warning
+      logger.warn(`Ollama not reachable at startup: ${error.message}`);
+    }
+  }
+
+  /**
+   * Stream with Flowith / Neo Knowledge API
+   * Expected streaming format: newline-delimited JSON objects with a `tag` field.
+   * Only human-readable message text is yielded to callers.
+   */
+  async *streamWithFlowith(prompt, options = {}) {
+    if (!this.flowithBaseUrl || !this.flowithApiKey) {
+      throw new Error('Flowith API not configured');
+    }
+
+    const {
+      model = this.flowithDefaultModel,
+      temperature = 0.7,
+      maxTokens = 2048,
+      messages,
+      kbList,
+      signal,
+      jsonMode = false,
+    } = options;
+
+    // Build conversation messages
+    let payloadMessages;
+    if (Array.isArray(messages) && messages.length > 0) {
+      payloadMessages = messages
+        .filter(m => m && typeof m.content === 'string')
+        .map(m => ({
+          role: typeof m.role === 'string' ? m.role : 'user',
+          content: String(m.content).replace(/\0/g, '').trim(),
+        }))
+        .filter(m => m.content.length > 0);
+    } else {
+      const safePrompt = (prompt || '').toString().replace(/\0/g, '').trim();
+      if (!safePrompt) {
+        throw new Error('Prompt is required for Flowith streaming');
+      }
+      payloadMessages = [{ role: 'user', content: safePrompt }];
+    }
+
+    // Normalize knowledge base list
+    let kb_list = Array.isArray(kbList)
+      ? kbList.map(id => String(id).trim()).filter(Boolean)
+      : [];
+    if (!kb_list.length && this.flowithDefaultKb) {
+      kb_list = [this.flowithDefaultKb];
+    }
+
+    // Pre-abort check
+    if (signal?.aborted) {
+      const abortError = new Error('Stream aborted');
+      abortError.name = 'AbortError';
+      throw abortError;
+    }
+
+    const body = {
+      messages: payloadMessages,
+      model,
+      stream: true,
+      kb_list: kb_list.length ? kb_list : undefined,
+      temperature,
+      response_format: jsonMode ? 'json' : 'text',
+      max_tokens: maxTokens,
+    };
+
+    try {
+      const response = await fetch(this.flowithBaseUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${this.flowithApiKey}`,
+        },
+        body: JSON.stringify(body),
+        signal,
+      });
+
+      const contentType = response.headers.get('content-type') || '';
+      if (!contentType.includes('application/json') && !contentType.includes('text/plain')) {
+        logger.warn(`Unexpected content type from Flowith streaming API: ${contentType}`);
+      }
+
+      if (!response.ok) {
+        const errorText = await response.text().catch(() => '');
+        throw new Error(`Flowith streaming error (${response.status}): ${errorText}`);
+      }
+
+      if (!response.body) {
+        throw new Error('Flowith API response does not support streaming');
+      }
+
+      const reader = response.body;
+      let buffer = '';
+
+      for await (const chunk of reader) {
+        if (signal?.aborted) {
+          const abortError = new Error('Stream aborted');
+          abortError.name = 'AbortError';
+          throw abortError;
+        }
+
+        buffer += chunk.toString();
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed) continue;
+
+          let data;
+          try {
+            data = JSON.parse(trimmed);
+          } catch (_) {
+            // Skip non-JSON lines
+            continue;
+          }
+
+          if (!data || typeof data !== 'object') continue;
+
+          const tag = data.tag || data.type || data.event;
+          const text =
+            data.text ||
+            data.content ||
+            (Array.isArray(data.messages) && data.messages.length > 0
+              ? data.messages[data.messages.length - 1]?.content
+              : null);
+
+          // Ignore purely internal tags like "searching" or "seeds" unless they contain useful text
+          const informationalTags = new Set(['searching', 'seeds']);
+          if (informationalTags.has(String(tag)) && !text) {
+            continue;
+          }
+
+          if (typeof text === 'string' && text.trim()) {
+            yield text;
+          }
+        }
+      }
+    } catch (error) {
+      if (error.name === 'AbortError') {
+        const abortError = new Error(error.message || 'Stream aborted');
+        abortError.name = 'AbortError';
+        throw abortError;
+      }
+      logger.error('Flowith streaming error:', { error: error.message });
+      throw new Error(`Failed to stream content with Flowith: ${error.message}`);
     }
   }
 
@@ -707,15 +1125,24 @@ Response (JSON only, no markdown or additional text):
       ];
       if (!includeHybrid) return models;
       return { provider: 'ollama', models, hybridSupported: !!this.genAI };
-    } else {
-      const models = [
-        'gemini-1.5-flash-latest',
-        'gemini-1.5-pro-latest',
-        'gemini-pro-vision'
-      ];
-      if (!includeHybrid) return models;
-      return { provider: 'gemini', models, hybridSupported: !!this.ollamaUrl };
     }
+
+    if (this.provider === 'flowith') {
+      const envModels = process.env.FLOWITH_MODELS;
+      const models = envModels
+        ? envModels.split(',').map(m => m.trim()).filter(Boolean)
+        : [this.flowithDefaultModel].filter(Boolean);
+      if (!includeHybrid) return models;
+      return { provider: 'flowith', models, hybridSupported: false };
+    }
+
+    const models = [
+      'gemini-1.5-flash-latest',
+      'gemini-1.5-pro-latest',
+      'gemini-pro-vision'
+    ];
+    if (!includeHybrid) return models;
+    return { provider: 'gemini', models, hybridSupported: !!this.ollamaUrl };
   }
 
   /**
@@ -724,8 +1151,22 @@ Response (JSON only, no markdown or additional text):
    */
   validateModel(model, options = {}) {
     const { fallbackToDefault = true } = options;
+
+    // Flowith models are often configured dynamically; accept any non-empty string
+    if (this.provider === 'flowith') {
+      if (!model) {
+        if (fallbackToDefault) {
+          const fallbackModel = this.flowithDefaultModel || this.defaultModel;
+          logger.warn(`No model specified for Flowith, using default: ${fallbackModel}`);
+          return fallbackModel;
+        }
+        throw new Error('Model is required for Flowith provider');
+      }
+      return model;
+    }
+
     const availableModels = this.getAvailableModels();
-    
+
     if (!model) {
       if (fallbackToDefault) {
         logger.warn(`No model specified, using default: ${this.defaultModel}`);
@@ -733,18 +1174,18 @@ Response (JSON only, no markdown or additional text):
       }
       throw new Error('Model is required');
     }
-    
+
     // Check if model is in available models list
     if (availableModels.includes(model)) {
       return model;
     }
-    
+
     // If model not found and fallback is enabled, use default
     if (fallbackToDefault) {
       logger.warn(`Model "${model}" not available for provider "${this.provider}", falling back to default: ${this.defaultModel}`);
       return this.defaultModel;
     }
-    
+
     // Throw error if model is invalid and fallback is disabled
     throw new Error(`Invalid model "${model}" for provider "${this.provider}". Available models: ${availableModels.join(', ')}`);
   }
@@ -779,9 +1220,206 @@ Response (JSON only, no markdown or additional text):
         default: 'gemini-1.5-flash-latest',
         supportsStreaming: true,
         supportsImageAnalysis: true,
+      },
+      flowith: {
+        models: (process.env.FLOWITH_MODELS || 'flowith-neo')
+          .split(',')
+          .map(m => m.trim())
+          .filter(Boolean),
+        default: process.env.FLOWITH_DEFAULT_MODEL || 'flowith-neo',
+        supportsStreaming: true,
+        supportsImageAnalysis: false,
       }
     };
   }
+
+  /**
+   * Generate multi-model collaborative content
+   */
+
+  /**
+   * Generate multi-model collaborative content
+   */
+  async generateCollaborativeContent(prompt, options = {}) {
+    if (this.provider !== 'ollama') {
+      const fallback = await this.generateContent(prompt, options);
+      return { final: fallback, steps: [], meta: null };
+    }
+
+    await this.ensureModelsReady();
+
+    const phases = [
+      { role: 'Strategist', instruction: 'Break down the request into a clear game plan and outline 3-5 actionable steps.' },
+      { role: 'Creator', instruction: 'Produce the actual content following the strategist plan using a confident, helpful tone.' },
+      { role: 'Optimizer', instruction: 'Review and upgrade the creator draft. Highlight improvements and ensure the message is compelling.' },
+    ];
+
+    const models = phases.map((_, index) => {
+      return this.collaborativeModels[index % this.collaborativeModels.length] || this.defaultModel;
+    });
+
+    const steps = [];
+    for (let index = 0; index < phases.length; index++) {
+      const { role, instruction } = phases[index];
+      const model = models[index];
+      const rolePrompt = `
+You are acting as the ${role} in a collaborative AI team.
+Guidance: ${instruction}
+
+User request:
+${prompt}
+
+Respond with clear ${role} output only.`;
+      const result = await this.generateWithOllama(rolePrompt, {
+        ...options,
+        model,
+      });
+      steps.push({
+        role,
+        model,
+        content: result?.trim() || '',
+      });
+    }
+
+    const synthesisPrompt = `
+You are the Orchestrator coordinating AI collaborators.
+Combine the following collaborator outputs into a unified final answer.
+
+${steps.map((step, idx) => `## ${idx + 1}. ${step.role} (${step.model})
+${step.content}`).join('\n\n')}
+
+Return a JSON object with:
+- "strategy": short recap of the agreed plan
+- "draft": the improved copy/content
+- "optimization": bullets describing enhancements made
+- "final_answer": polished final response for the user
+`;
+
+    const synthesis = await this.generateWithOllama(synthesisPrompt, {
+      ...options,
+      model: options.model || this.defaultModel,
+      temperature: options.temperature ?? 0.6,
+    });
+
+    const parsed = this.safeJsonParse(synthesis);
+    const final =
+      (parsed && (parsed.final_answer || parsed.final || parsed.answer)) ||
+      synthesis;
+
+    return {
+      final: typeof final === 'string' ? final.trim() : final,
+      steps,
+      meta: parsed || { raw: synthesis },
+    };
+  }
+
+  async ensureModelsReady() {
+    if (this.provider !== 'ollama') return;
+    if (this.preloadComplete) return;
+    if (!this.preloadPromise) {
+      this.preloadPromise = this.preloadOllamaModels().catch(error => {
+        logger.warn('Model preload failed', { error: error.message });
+      });
+    }
+    try {
+      await this.preloadPromise;
+      this.preloadComplete = true;
+      this.preloadPromise = null;
+    } catch (error) {
+      logger.warn('Model preload did not finish', { error: error.message });
+      this.preloadPromise = null;
+    }
+  }
+
+  async preloadOllamaModels() {
+    if (!this.ollamaUrl || !this.requiredModels.length) {
+      this.preloadComplete = true;
+      return;
+    }
+
+    const installed = await this.fetchInstalledOllamaModels();
+    for (const model of this.requiredModels) {
+      await this.pullModelIfNeeded(model, installed);
+      await this.warmupModel(model);
+    }
+    logger.info('Ollama models preloaded', { models: this.requiredModels });
+  }
+
+  async fetchInstalledOllamaModels() {
+    try {
+      const response = await fetch(`${this.ollamaUrl}/api/tags`);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch tags (${response.status})`);
+      }
+      const data = await response.json();
+      const models = new Set(
+        (data?.models || [])
+          .map(item => item?.name)
+          .filter(Boolean)
+      );
+      return models;
+    } catch (error) {
+      logger.warn('Unable to read Ollama tags', { error: error.message });
+      return new Set();
+    }
+  }
+
+  async pullModelIfNeeded(model, installedSet) {
+    if (installedSet.has(model)) return;
+    try {
+      const response = await fetch(`${this.ollamaUrl}/api/pull`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(this.ollamaApiKey && { Authorization: `Bearer ${this.ollamaApiKey}` }),
+        },
+        body: JSON.stringify({ model, stream: false }),
+      });
+      if (!response.ok) {
+        throw new Error(`Pull request failed with status ${response.status}`);
+      }
+      await response.text();
+      installedSet.add(model);
+      logger.info('Pulled Ollama model', { model });
+    } catch (error) {
+      logger.warn('Unable to pull Ollama model', { model, error: error.message });
+    }
+  }
+
+  async warmupModel(model) {
+    try {
+      const response = await fetch(`${this.ollamaUrl}/api/generate`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(this.ollamaApiKey && { Authorization: `Bearer ${this.ollamaApiKey}` }),
+        },
+        body: JSON.stringify({
+          model,
+          prompt: `You are warming up for Momentum AI. Reply with "READY" to confirm ${model} is loaded.`,
+          stream: false,
+          options: { temperature: 0.2, num_predict: 5 },
+        }),
+      });
+      if (!response.ok) {
+        throw new Error(`Warm-up failed (${response.status})`);
+      }
+      await response.text();
+      logger.info('Warmed up Ollama model', { model });
+    } catch (error) {
+      logger.warn('Warm-up skipped', { model, error: error.message });
+    }
+  }
+
+  safeJsonParse(payload) {
+    if (!payload || typeof payload !== 'string') return null;
+    try {
+      return JSON.parse(payload);
+    } catch (_) {
+      return null;
+    }
+  }
+
 }
 
 // Export singleton instance

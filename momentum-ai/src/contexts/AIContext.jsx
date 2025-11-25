@@ -14,6 +14,10 @@ const initialState = {
     model: 'pro', // 'pro' or 'flash'
     temperature: 0.7,
     maxTokens: 2048,
+    // Optional provider override (e.g., 'ollama', 'gemini', 'flowith')
+    provider: null,
+    // Optional Flowith / Neo knowledge base IDs
+    kbList: [],
   },
   aiConfigError: null, // AI provider configuration error
 };
@@ -116,6 +120,7 @@ function aiReducer(state, action) {
 
 // Create context
 const AIContext = createContext();
+export { AIContext };
 
 // Provider component
 export const AIProvider = ({ children }) => {

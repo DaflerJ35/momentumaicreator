@@ -18,6 +18,7 @@ export const NOTIFICATION_TYPES = {
   MESSAGE: 'message',
   COLLABORATION: 'collaboration',
   SYSTEM: 'system',
+  GAMIFIED: 'gamified',
 };
 
 // Notification priorities
@@ -120,6 +121,13 @@ export const NotificationProvider = ({ children }) => {
     async (notification) => {
       if (!currentUser || !database || database._isMock) {
         // Fallback to toast if Firebase is not available
+        if (notification.type === NOTIFICATION_TYPES.GAMIFIED) {
+          toast.success(notification.title, {
+            description: notification.message,
+            className: 'border border-emerald-500/30 bg-emerald-500/10 text-white',
+          });
+          return;
+        }
         toast[notification.type]?.(
           notification.title,
           { description: notification.message }
@@ -311,19 +319,18 @@ export const useNotifications = () => {
       notifications: [],
       unreadCount: 0,
       isNotificationCenterOpen: false,
-      setIsNotificationCenterOpen: () => {},
-      createNotification: () => {},
-      markAsRead: () => {},
-      markAllAsRead: () => {},
-      deleteNotification: () => {},
-      clearAllNotifications: () => {},
-      sendNotificationToUser: () => {},
-      NOTIFICATION_TYPES,
-      NOTIFICATION_PRIORITY,
+      setIsNotificationCenterOpen: function () {},
+      createNotification: function () {},
+      markAsRead: function () {},
+      markAllAsRead: function () {},
+      deleteNotification: function () {},
+      clearAllNotifications: function () {},
+      sendNotificationToUser: function () {},
+      NOTIFICATION_TYPES: NOTIFICATION_TYPES,
+      NOTIFICATION_PRIORITY: NOTIFICATION_PRIORITY,
     };
   }
   return context;
 };
 
 export default NotificationContext;
-

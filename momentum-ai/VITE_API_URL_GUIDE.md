@@ -192,6 +192,10 @@ Or after deployment:
 - **Server variables** (no VITE_ prefix) also go in Vercel Environment Variables
 - Vercel will use the right ones for frontend vs server
 
+### 4. Flowith / Neo Provider (if enabled)
+- In production, keep `API_URL`, `FRONTEND_URL`, `VITE_APP_URL`, and (optionally) `VITE_API_URL` **all pointing to the same deployed domain** (your Vercel app or custom domain).
+- Do **not** leave any `http://localhost:3001` values in the Production environment, or the `/api/ai/models` startup health check may hit the wrong origin and return 404.
+
 ---
 
 ## ✅ Quick Checklist

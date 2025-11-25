@@ -1,3 +1,7 @@
+/**
+ * @jest-environment node
+ */
+
 const request = require('supertest');
 
 // Mock environment variables before requiring server
@@ -19,6 +23,10 @@ process.env.STRIPE_YEARLY_BUSINESS_PLUS_PRICE_ID = 'price_test_yearly_businesspl
 process.env.AI_PROVIDER = 'ollama';
 process.env.OLLAMA_URL = 'http://localhost:11434';
 process.env.AI_DEFAULT_MODEL = 'llama2';
+process.env.TOKEN_ENCRYPTION_KEY = '1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef';
+process.env.OAUTH_STATE_SECRET = 'test_state_secret';
+process.env.FIREBASE_PROJECT_ID = 'test-project';
+process.env.FREE_AI_MODE = 'false';
 
 // Mock Stripe
 const mockStripeCheckoutSessionsCreate = jest.fn();
@@ -53,7 +61,14 @@ jest.mock('../services/aiService', () => {
     provider: 'ollama',
     defaultModel: 'llama2',
     getAvailableModels: jest.fn(() => ['llama2', 'mistral', 'codellama']),
-    generateContent: jest.fn(),
+    generateContent: jest.fn(async () => 'Mock AI response'),
+    generateStructuredContent: jest.fn(async () => ({ mock: true })),
+    generateCollaborativeContent: jest.fn(async () => ({
+      final: 'Combined output',
+      steps: [],
+      meta: null,
+    })),
+    analyzeImage: jest.fn(async () => 'vision'),
     constructor: {
       getProviderModelMap: jest.fn(() => ({
         ollama: {

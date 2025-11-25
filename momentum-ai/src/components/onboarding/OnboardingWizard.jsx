@@ -22,8 +22,10 @@ import {
 import { Button } from '../ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../ui/card';
 import { useAuth } from '../../contexts/AuthContext';
+import { useNotifications, NOTIFICATION_TYPES } from '../../contexts/NotificationContext';
 import { toast } from 'sonner';
 import { database, ref, set, get } from '../../lib/firebase';
+import { Badge } from '../ui/badge';
 
 const STEPS = [
   {
@@ -63,13 +65,58 @@ const STEPS = [
   }
 ];
 
+const BADGE_CONFIG = {
+  welcome: {
+    id: 'welcome',
+    label: 'Launchpad Ready',
+    description: 'Kicked off the fast-track journey',
+  },
+  'connect-platforms': {
+    id: 'connect-platforms',
+    label: 'Platform Pro',
+    description: 'Connected your first platform',
+  },
+  'create-content': {
+    id: 'create-content',
+    label: 'Creative Spark',
+    description: 'Generated AI-powered content',
+  },
+  publish: {
+    id: 'publish',
+    label: 'Momentum Maker',
+    description: 'Published with Momentum AI',
+  },
+  complete: {
+    id: 'complete',
+    label: 'Momentum Starter',
+    description: 'Finished onboarding and earned XP',
+  },
+};
+
 const OnboardingWizard = ({ isOpen, onClose, onComplete }) => {
   const [currentStep, setCurrentStep] = useState(0);
   const [completedSteps, setCompletedSteps] = useState([]);
   const [connectedPlatforms, setConnectedPlatforms] = useState([]);
   const [selectedPlatforms, setSelectedPlatforms] = useState([]);
+  const [earnedBadges, setEarnedBadges] = useState([]);
   const navigate = useNavigate();
   const { currentUser } = useAuth();
+  const { createNotification } = useNotifications();
+
+  const trackProgress = (stepId) => {
+    if (!stepId) return;
+
+    setCompletedSteps((prev) =>
+      prev.includes(stepId) ? prev : [...prev, stepId]
+    );
+
+    const badge = BADGE_CONFIG[stepId];
+    if (badge) {
+      setEarnedBadges((prev) =>
+        prev.some((item) => item.id === badge.id) ? prev : [...prev, badge]
+      );
+    }
+  };
 
   // Check if user has completed onboarding
   useEffect(() => {
@@ -103,6 +150,9 @@ const OnboardingWizard = ({ isOpen, onClose, onComplete }) => {
   ];
 
   const handleNext = () => {
+    const currentStepId = STEPS[currentStep].id;
+    trackProgress(currentStepId);
+
     if (currentStep < STEPS.length - 1) {
       setCurrentStep(currentStep + 1);
     } else {
@@ -128,7 +178,15 @@ const OnboardingWizard = ({ isOpen, onClose, onComplete }) => {
         });
       }
 
+      trackProgress(STEPS[currentStep].id);
+      trackProgress('complete');
+
       toast.success('Onboarding complete! Let\'s start making money! 🚀');
+      createNotification?.({
+        type: NOTIFICATION_TYPES.GAMIFIED,
+        title: 'Momentum Starter badge unlocked',
+        message: 'You completed onboarding and earned +120 XP.',
+      });
       
       if (onComplete) {
         onComplete();
@@ -166,11 +224,18 @@ const OnboardingWizard = ({ isOpen, onClose, onComplete }) => {
 
   const renderStepContent = () => {
     const step = STEPS[currentStep];
+    const activeBadge = BADGE_CONFIG[step.id];
     
     switch (step.content) {
       case 'welcome':
         return (
           <div className="text-center space-y-6">
+            {activeBadge && (
+              <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-emerald-500/10 border border-emerald-400/30 text-emerald-200 text-sm font-semibold mx-auto">
+                <Sparkles className="w-4 h-4" />
+                {activeBadge.label}
+              </div>
+            )}
             <motion.div
               initial={{ scale: 0 }}
               animate={{ scale: 1 }}
@@ -206,6 +271,15 @@ const OnboardingWizard = ({ isOpen, onClose, onComplete }) => {
       case 'platforms':
         return (
           <div className="space-y-6">
+            {activeBadge && (
+              <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-3 flex items-center gap-3">
+                <Sparkles className="w-5 h-5 text-emerald-300" />
+                <div className="text-left">
+                  <p className="text-sm font-semibold text-white">{activeBadge.label}</p>
+                  <p className="text-xs text-emerald-200/80">{activeBadge.description}</p>
+                </div>
+              </div>
+            )}
             <div className="text-center mb-6">
               <h3 className="text-xl font-semibold text-white mb-2">
                 Connect Your Money-Making Platforms
@@ -264,6 +338,12 @@ const OnboardingWizard = ({ isOpen, onClose, onComplete }) => {
       case 'content':
         return (
           <div className="space-y-6 text-center">
+            {activeBadge && (
+              <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-emerald-500/10 border border-emerald-400/30 text-emerald-200 text-sm font-semibold mx-auto">
+                <Sparkles className="w-4 h-4" />
+                {activeBadge.label}
+              </div>
+            )}
             <div className="w-20 h-20 mx-auto bg-gradient-to-br from-purple-500 to-pink-600 rounded-full flex items-center justify-center mb-6">
               <Sparkles className="w-10 h-10 text-white" />
             </div>
@@ -318,6 +398,12 @@ const OnboardingWizard = ({ isOpen, onClose, onComplete }) => {
       case 'publish':
         return (
           <div className="space-y-6 text-center">
+            {activeBadge && (
+              <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-emerald-500/10 border border-emerald-400/30 text-emerald-200 text-sm font-semibold mx-auto">
+                <Sparkles className="w-4 h-4" />
+                {activeBadge.label}
+              </div>
+            )}
             <div className="w-20 h-20 mx-auto bg-gradient-to-br from-green-500 to-emerald-600 rounded-full flex items-center justify-center mb-6">
               <DollarSign className="w-10 h-10 text-white" />
             </div>
@@ -359,6 +445,12 @@ const OnboardingWizard = ({ isOpen, onClose, onComplete }) => {
       case 'complete':
         return (
           <div className="space-y-6 text-center">
+            {activeBadge && (
+              <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-emerald-500/10 border border-emerald-400/30 text-emerald-200 text-sm font-semibold mx-auto">
+                <Sparkles className="w-4 h-4" />
+                {activeBadge.label}
+              </div>
+            )}
             <motion.div
               initial={{ scale: 0 }}
               animate={{ scale: 1 }}
@@ -465,36 +557,59 @@ const OnboardingWizard = ({ isOpen, onClose, onComplete }) => {
 
           {/* Step Indicators */}
           <div className="px-6 py-4 flex items-center justify-between">
-            {STEPS.map((step, index) => (
-              <div
-                key={step.id}
-                className={`flex-1 flex items-center ${
-                  index < STEPS.length - 1 ? 'mr-2' : ''
-                }`}
-              >
+            {STEPS.map((step, index) => {
+              const isComplete = completedSteps.includes(step.id) || index < currentStep;
+              return (
                 <div
-                  className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                    index <= currentStep
-                      ? 'bg-emerald-500 text-white'
-                      : 'bg-slate-800 text-slate-400'
+                  key={step.id}
+                  className={`flex-1 flex items-center ${
+                    index < STEPS.length - 1 ? 'mr-2' : ''
                   }`}
                 >
-                  {index < currentStep ? (
-                    <CheckCircle2 className="w-5 h-5" />
-                  ) : (
-                    <step.icon className="w-4 h-4" />
+                  <div
+                    className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                      isComplete
+                        ? 'bg-emerald-500 text-white'
+                        : 'bg-slate-800 text-slate-400'
+                    }`}
+                  >
+                    {isComplete ? (
+                      <CheckCircle2 className="w-5 h-5" />
+                    ) : (
+                      <step.icon className="w-4 h-4" />
+                    )}
+                  </div>
+                  {index < STEPS.length - 1 && (
+                    <div
+                      className={`flex-1 h-1 mx-2 ${
+                        isComplete ? 'bg-emerald-500' : 'bg-slate-800'
+                      }`}
+                    />
                   )}
                 </div>
-                {index < STEPS.length - 1 && (
-                  <div
-                    className={`flex-1 h-1 mx-2 ${
-                      index < currentStep ? 'bg-emerald-500' : 'bg-slate-800'
-                    }`}
-                  />
-                )}
-              </div>
-            ))}
+              );
+            })}
           </div>
+
+          {earnedBadges.length > 0 && (
+            <div className="px-6 pb-2">
+              <p className="text-[11px] uppercase tracking-wide text-emerald-400 mb-2">
+                Badges unlocked
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {earnedBadges.map((badge) => (
+                  <Badge
+                    key={badge.id}
+                    variant="success"
+                    className="bg-emerald-500/10 border-emerald-400/30 text-emerald-200 flex items-center gap-1"
+                  >
+                    <Sparkles className="w-3 h-3" />
+                    {badge.label}
+                  </Badge>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Content */}
           <div className="px-6 pb-6">

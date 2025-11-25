@@ -1,11 +1,15 @@
+/**
+ * @jest-environment node
+ */
+
 const request = require('supertest');
 const express = require('express');
-const { describe, it, expect, beforeAll, afterAll, vi } = require('@jest/globals');
+const { describe, it, expect, beforeAll, afterAll, beforeEach, jest } = require('@jest/globals');
 
 // Mock Stripe
-const mockCreate = vi.fn();
+const mockCreate = jest.fn();
 jest.mock('stripe', () => {
-  return vi.fn().mockImplementation(() => ({
+  return jest.fn().mockImplementation(() => ({
     checkout: {
       sessions: {
         create: mockCreate,
@@ -85,7 +89,7 @@ describe('Checkout Session API', () => {
   });
 
   afterAll(() => {
-    vi.clearAllMocks();
+    jest.clearAllMocks();
   });
 
   beforeEach(() => {

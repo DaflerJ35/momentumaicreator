@@ -3,7 +3,9 @@ import { motion } from 'framer-motion';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell } from 'recharts';
 import { Button } from '../../components/ui/button';
-import { Download, Filter, Calendar, TrendingUp, Users, Eye, Heart } from 'lucide-react';
+import { Badge } from '../../components/ui/badge';
+import { useNotifications, NOTIFICATION_TYPES } from '../../contexts/NotificationContext';
+import { Download, Filter, Calendar, TrendingUp, Users, Eye, Heart, Trophy, Flame } from 'lucide-react';
 
 const analyticsData = [
   { name: 'Jan', engagement: 65, reach: 78, impressions: 89 },
@@ -23,7 +25,24 @@ const platformData = [
 
 const COLORS = ['#10b981', '#3b82f6', '#8b5cf6', '#f59e0b'];
 
+const leaderboardData = [
+  { name: 'Creator Lab', percentile: 92, trend: '+4% week over week' },
+  { name: 'Momentum Collective', percentile: 88, trend: '+2% week over week' },
+  { name: 'Neon Syndicate', percentile: 84, trend: '+8% week over week' },
+  { name: 'Growth Ops', percentile: 79, trend: '+3% week over week' },
+];
+
 const Analytics = () => {
+  const { createNotification } = useNotifications();
+
+  const handleExport = () => {
+    createNotification?.({
+      type: NOTIFICATION_TYPES.GAMIFIED,
+      title: 'Data Maven badge progression',
+      message: 'Shared advanced analytics — +15 Momentum Points.',
+    });
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -37,6 +56,10 @@ const Analytics = () => {
             Analytics Dashboard
           </h1>
           <p className="text-slate-400">Track and analyze your content performance</p>
+          <Badge className="mt-3 bg-emerald-500/10 border-emerald-400/30 text-emerald-200 flex items-center gap-2 w-fit">
+            <Trophy className="w-3 h-3" />
+            You’re outperforming 82% of teams this week
+          </Badge>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" className="bg-slate-800/50 border-slate-700">
@@ -47,7 +70,10 @@ const Analytics = () => {
             <Filter className="w-4 h-4 mr-2" />
             Filter
           </Button>
-          <Button className="bg-gradient-to-r from-emerald-600 to-cyan-600 hover:from-emerald-700 hover:to-cyan-700">
+          <Button
+            className="bg-gradient-to-r from-emerald-600 to-cyan-600 hover:from-emerald-700 hover:to-cyan-700"
+            onClick={handleExport}
+          >
             <Download className="w-4 h-4 mr-2" />
             Export
           </Button>
@@ -193,6 +219,48 @@ const Analytics = () => {
           </CardContent>
         </Card>
       </div>
+
+      <Card className="bg-gradient-to-br from-slate-800/60 to-slate-900/60 border-slate-700/50">
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-white flex items-center gap-2">
+              <Flame className="w-5 h-5 text-emerald-400" />
+              Community League
+            </CardTitle>
+            <Badge variant="warning" className="bg-amber-500/10 border-amber-400/40 text-amber-200">
+              Live
+            </Badge>
+          </div>
+          <p className="text-slate-400 text-sm">
+            Friendly competition against similar teams. Finish the week in the top 10 to unlock bonus templates.
+          </p>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {leaderboardData.map((entry, index) => (
+            <div
+              key={entry.name}
+              className="p-4 rounded-xl bg-slate-900/60 border border-slate-800/60"
+            >
+              <div className="flex items-center justify-between text-sm text-white">
+                <span className="font-semibold">
+                  #{index + 1} {entry.name}
+                </span>
+                <span className="text-emerald-400">{entry.percentile} percentile</span>
+              </div>
+              <div className="w-full bg-slate-800/80 rounded-full h-2 mt-3 overflow-hidden">
+                <div
+                  className="h-2 rounded-full bg-gradient-to-r from-emerald-500 to-cyan-500"
+                  style={{ width: `${entry.percentile}%` }}
+                />
+              </div>
+              <p className="text-xs text-slate-400 mt-2">{entry.trend}</p>
+            </div>
+          ))}
+          <Button className="w-full bg-slate-800/70 border border-slate-700 hover:bg-slate-700">
+            View full league
+          </Button>
+        </CardContent>
+      </Card>
     </div>
   );
 };

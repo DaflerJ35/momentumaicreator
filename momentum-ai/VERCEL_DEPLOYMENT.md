@@ -10,10 +10,13 @@
 
 2. **Configure Build Settings**
    - **Framework Preset**: Vite
-   - **Root Directory**: `./` (root)
+   - **Root Directory**: `./` (repo root, which uses the main `momentum-ai` app)
    - **Build Command**: `npm run build`
    - **Output Directory**: `dist`
    - **Install Command**: `npm install`
+
+   > Note: The separate `Momentum_AI_LandingPage` folder is a standalone marketing site.  
+   > If you deploy it, use a **second** Vercel project and a different domain/subdomain (for example, `promo.yourdomain.com`). The primary app domain (with Neo/Flowith integration and `/dashboard`) should point at the project that uses this root `vercel.json` and the `momentum-ai` app.
 
 3. **Environment Variables to Add**
 

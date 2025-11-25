@@ -17,7 +17,7 @@ function startScheduler() {
     logger.warn('Scheduler already running');
     return;
   }
-  
+
   // Check for scheduled posts every minute
   schedulerInterval = setInterval(async () => {
     try {
@@ -26,7 +26,7 @@ function startScheduler() {
       logger.error(`Scheduler error: ${error.message}`);
     }
   }, 60000); // Every minute
-  
+
   logger.info('Scheduler started');
 }
 
@@ -46,41 +46,49 @@ function stopScheduler() {
  */
 async function processScheduledPosts() {
   try {
+    // Check if Firebase is initialized before attempting to access database
+    const admin = require('../firebaseAdmin');
+    if (typeof admin.isInitialized === 'function' && !admin.isInitialized()) {
+      // Silent return or debug log to avoid spamming errors when Firebase isn't configured
+      // This is expected behavior in dev environments without credentials
+      return;
+    }
+
     const db = getDatabase();
     const usersRef = db.ref('users');
     const usersSnapshot = await usersRef.once('value');
-    
+
     if (!usersSnapshot.exists()) {
       return;
     }
-    
+
     const users = usersSnapshot.val();
     const now = Date.now();
-    
+
     // Process each user's scheduled posts
     for (const [userId, userData] of Object.entries(users)) {
       if (!userData.scheduledPosts) {
         continue;
       }
-      
+
       const scheduledPosts = userData.scheduledPosts;
-      
+
       for (const [postId, postData] of Object.entries(scheduledPosts)) {
         // Skip if already processed or cancelled
         if (postData.status !== 'scheduled') {
           continue;
         }
-        
+
         // Check if it's time to post
         const scheduleTime = postData.scheduleTime;
         if (!scheduleTime || scheduleTime > now) {
           continue;
         }
-        
+
         // Post is due - publish it
         try {
           logger.info(`Publishing scheduled post ${postId} for user ${userId}`);
-          
+
           const result = await postingService.postToPlatform(
             postData.platformId,
             userId,
@@ -90,10 +98,10 @@ async function processScheduledPosts() {
               options: postData.options || {},
             }
           );
-          
+
           // Update post status
           await platformService.updateScheduledPostStatus(userId, postId, 'published', result);
-          
+
           // Store analytics
           await platformService.storePostAnalytics(userId, postData.platformId, result.postId, {
             impressions: 0,
@@ -101,7 +109,7 @@ async function processScheduledPosts() {
             reach: 0,
             clicks: 0,
           });
-          
+
           logger.info(`Successfully published scheduled post ${postId}`);
         } catch (error) {
           logger.error(`Error publishing scheduled post ${postId}: ${error.message}`, {
@@ -110,7 +118,7 @@ async function processScheduledPosts() {
             statusText: error.response?.statusText,
             data: error.response?.data,
           });
-          
+
           // Update post status to failed with detailed error info
           await platformService.updateScheduledPostStatus(userId, postId, 'failed', {
             error: error.message,
@@ -134,10 +142,10 @@ async function getUpcomingPosts(userId, limit = 10) {
   try {
     const posts = await platformService.getScheduledPosts(userId, limit);
     const now = Date.now();
-    
-    return posts.filter(post => 
-      post.status === 'scheduled' && 
-      post.scheduleTime && 
+
+    return posts.filter(post =>
+      post.status === 'scheduled' &&
+      post.scheduleTime &&
       post.scheduleTime > now
     ).sort((a, b) => a.scheduleTime - b.scheduleTime);
   } catch (error) {

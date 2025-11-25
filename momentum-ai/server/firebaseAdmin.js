@@ -19,7 +19,7 @@ function initializeFirebaseAdmin() {
     // Get service account from environment variable (JSON string) or file path
     const serviceAccountPath = process.env.FIREBASE_SERVICE_ACCOUNT_PATH;
     let serviceAccount;
-    
+
     if (serviceAccountPath) {
       // If path is provided, load from file
       const fs = require('fs');
@@ -61,4 +61,5 @@ function initializeFirebaseAdmin() {
 initializeFirebaseAdmin();
 
 module.exports = admin;
+module.exports.isInitialized = () => initialized;
 

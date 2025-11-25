@@ -3,6 +3,9 @@
  * No API keys needed on the client side!
  */
 
+import { setLoading as setGlobalLoading } from '../components/ui/GlobalLoadingIndicator';
+import { auth } from './firebase';
+
 // Use relative paths in production (same domain), or VITE_API_URL if explicitly set
 const getApiUrl = () => {
   const envUrl = import.meta.env.VITE_API_URL;
@@ -17,23 +20,12 @@ const getApiUrl = () => {
 
 const API_URL = getApiUrl();
 
-// Import global loading indicator (dynamic to avoid circular deps)
-let setGlobalLoading;
-if (typeof window !== 'undefined') {
-  import('../components/ui/GlobalLoadingIndicator').then(module => {
-    setGlobalLoading = module.setLoading;
-  }).catch(() => {
-    // Ignore if module not available
-  });
-}
-
 /**
  * Get Firebase auth token with automatic refresh
  * Handles token expiration and refresh automatically
  * Returns null if user is not authenticated (instead of throwing)
  */
 async function getAuthToken(forceRefresh = false) {
-  const { auth } = await import('../lib/firebase');
   const user = auth.currentUser;
   if (!user) {
     return null; // Return null instead of throwing for unauthenticated state
@@ -248,6 +240,9 @@ export const aiAPI = {
         temperature: options.temperature || 0.7,
         maxTokens: options.maxTokens || 2048,
         provider: options.provider,
+        // Optional Flowith / Neo parameters
+        messages: options.messages,
+        kbList: options.kbList,
       }),
     });
     
@@ -299,6 +294,9 @@ export const aiAPI = {
         temperature: options.temperature || 0.7,
         maxTokens: options.maxTokens || 2048,
         provider: options.provider,
+        // Optional Flowith / Neo parameters
+        messages: options.messages,
+        kbList: options.kbList,
       }),
     });
 

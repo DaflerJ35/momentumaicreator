@@ -4,8 +4,10 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Card, CardContent } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
+import { Badge } from '../../components/ui/badge';
 import { useAuth } from '../../contexts/AuthContext';
 import { useCollaboration } from '../../contexts/CollaborationContext';
+import { useNotifications, NOTIFICATION_TYPES } from '../../contexts/NotificationContext';
 import CollaborationCursor from '../../components/CollaborationCursor';
 import { PLATFORMS, getPlatformsByCategory } from '../../lib/platforms';
 import { unifiedAPI } from '../../lib/unifiedAPI';
@@ -46,15 +48,32 @@ import {
   Globe,
   Link2,
   Plus,
-  Rocket
+  Rocket,
+  Flame,
+  Trophy
 } from 'lucide-react';
 
 const Dashboard = () => {
   const { currentUser } = useAuth();
   const navigate = useNavigate();
+  const { createNotification } = useNotifications();
   const [idea, setIdea] = useState('');
   const [analysis, setAnalysis] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [momentumStats, setMomentumStats] = useState({
+    streakDays: 3,
+    completedDays: 3,
+    weeklyGoal: 5,
+    xp: 420,
+    quest: {
+      id: 'daily-neural-strategist',
+      title: 'Publish with Neural Strategist',
+      tool: 'Neural Strategist',
+      reward: 50,
+      completed: false,
+      expiresAt: Date.now() + 1000 * 60 * 60 * 6,
+    },
+  });
 
   // Keyboard shortcuts
   useKeyboardShortcuts([
@@ -84,6 +103,65 @@ const Dashboard = () => {
       },
     },
   ]);
+
+  useEffect(() => {
+    if (!currentUser?.gamification) return;
+
+    setMomentumStats((prev) => ({
+      ...prev,
+      ...currentUser.gamification,
+      quest: {
+        ...prev.quest,
+        ...(currentUser.gamification.quest || {}),
+      },
+    }));
+  }, [currentUser]);
+
+  const questCompleted = Boolean(momentumStats.quest?.completed);
+  const questReward = momentumStats.quest?.reward || 0;
+  const questToolName = momentumStats.quest?.tool || '';
+  const weeklyProgress = Math.min(
+    100,
+    Math.round(
+      ((momentumStats.completedDays || 0) /
+        (momentumStats.weeklyGoal || 1)) *
+        100
+    )
+  );
+  const questHoursRemaining = momentumStats.quest?.expiresAt
+    ? Math.max(
+        1,
+        Math.round(
+          (momentumStats.quest.expiresAt - Date.now()) / (1000 * 60 * 60)
+        )
+      )
+    : null;
+  const xpDisplay = Number(momentumStats.xp || 0).toLocaleString();
+
+  const handleQuestComplete = () => {
+    if (!momentumStats.quest || questCompleted) return;
+    const reward = questReward;
+
+    setMomentumStats((prev) => ({
+      ...prev,
+      completedDays: Math.min(
+        (prev.completedDays || 0) + 1,
+        prev.weeklyGoal || prev.completedDays || 1
+      ),
+      xp: (prev.xp || 0) + reward,
+      quest: {
+        ...prev.quest,
+        completed: true,
+        completedAt: Date.now(),
+      },
+    }));
+
+    createNotification?.({
+      type: NOTIFICATION_TYPES.GAMIFIED,
+      title: 'Daily quest complete',
+      message: `+${reward} Momentum Points — ${momentumStats.quest.title}`,
+    });
+  };
 
   const kpis = [
     { 
@@ -415,11 +493,118 @@ const Dashboard = () => {
                   </div>
                 </div>
               </div>
-            </motion.div>
-            </StaggerItem>
-          );
-        })}
+      </motion.div>
+      </StaggerItem>
+        );
+      })}
       </StaggerContainer>
+
+      {/* Momentum Meter & Daily Quest */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5, delay: 0.6 }}
+        className="mb-8 grid gap-6 lg:grid-cols-3"
+      >
+        <div className="lg:col-span-2 rounded-2xl glass-morphism border border-white/10 p-6 relative overflow-hidden">
+          <div className="absolute inset-0 bg-gradient-to-r from-neon-blue/5 via-neon-magenta/5 to-neon-violet/5 pointer-events-none" />
+          <div className="relative z-10">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <p className="text-xs uppercase tracking-[0.3em] text-slate-400">
+                  Momentum Meter
+                </p>
+                <h3 className="text-2xl font-bold text-white">Keep the streak alive</h3>
+              </div>
+              <Badge className="bg-emerald-500/10 border-emerald-400/30 text-emerald-200 flex items-center gap-2">
+                <Flame className="h-4 w-4" />
+                {momentumStats.streakDays} day streak
+              </Badge>
+            </div>
+            <p className="text-xs text-slate-400 mb-3">
+              Weekly goal: {momentumStats.weeklyGoal} creative days
+            </p>
+            <div className="w-full bg-slate-900/70 rounded-full h-3 overflow-hidden">
+              <motion.div
+                className="h-3 rounded-full bg-gradient-to-r from-emerald-500 via-cyan-500 to-neon-blue shadow-lg"
+                animate={{ width: `${weeklyProgress}%` }}
+                transition={{ duration: 0.5 }}
+                style={{ width: `${weeklyProgress}%` }}
+              />
+            </div>
+            <div className="flex items-center justify-between text-xs text-slate-400 mt-2">
+              <span>
+                {momentumStats.completedDays} / {momentumStats.weeklyGoal} actions logged
+              </span>
+              <span>{xpDisplay} XP</span>
+            </div>
+            <div className="grid grid-cols-2 gap-4 mt-6">
+              <div className="rounded-xl border border-white/10 bg-white/5 p-4 flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-emerald-500/20">
+                  <Flame className="h-5 w-5 text-emerald-300" />
+                </div>
+                <div>
+                  <p className="text-xs text-slate-400">Daily streak</p>
+                  <p className="text-lg font-semibold text-white">{momentumStats.streakDays} days</p>
+                </div>
+              </div>
+              <div className="rounded-xl border border-white/10 bg-white/5 p-4 flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-neon-blue/20">
+                  <Trophy className="h-5 w-5 text-neon-blue" />
+                </div>
+                <div>
+                  <p className="text-xs text-slate-400">Momentum points</p>
+                  <p className="text-lg font-semibold text-white">{xpDisplay} XP</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="rounded-2xl glass-morphism border border-neon-blue/40 p-6 relative overflow-hidden">
+          <div className="absolute inset-0 bg-gradient-to-br from-neon-blue/10 to-neon-magenta/10" />
+          <div className="relative z-10 h-full flex flex-col">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-xs uppercase tracking-[0.3em] text-slate-400">
+                Daily Quest
+              </p>
+              <Badge variant="secondary" className="bg-neon-blue/20 border-neon-blue/40 text-neon-blue flex items-center gap-1">
+                +{questReward} XP
+              </Badge>
+            </div>
+            <h3 className="text-xl font-bold text-white mb-1">
+              {momentumStats.quest?.title}
+            </h3>
+            <p className="text-sm text-slate-300 mb-4">
+              {questCompleted
+                ? 'Reward claimed — stay tuned for the next challenge.'
+                : `Complete this flow in ${questToolName || 'the highlighted tool'} to bank bonus XP.`}
+            </p>
+            <div className="flex flex-col gap-3 mt-auto">
+              <Button
+                onClick={() => navigate('/ai-tools/neural-strategist')}
+                className="bg-gradient-to-r from-neon-blue to-neon-magenta hover:from-neon-magenta hover:to-neon-blue transition-all"
+              >
+                Launch {questToolName || 'Tool'}
+              </Button>
+              <Button
+                onClick={handleQuestComplete}
+                disabled={questCompleted}
+                variant="outline"
+                className={`border-emerald-400/50 text-emerald-300 hover:bg-emerald-500/10 ${
+                  questCompleted ? 'opacity-60 cursor-not-allowed' : ''
+                }`}
+              >
+                {questCompleted ? 'Quest Completed' : 'Claim Reward'}
+              </Button>
+            </div>
+            <div className="flex items-center gap-2 text-xs text-slate-400 mt-4">
+              <Clock className="h-4 w-4" />
+              {questHoursRemaining ? `${questHoursRemaining}h remaining` : 'Renews daily'}
+            </div>
+          </div>
+        </div>
+      </motion.div>
 
       {/* Welcome Banner - Matching Landing Page */}
       <motion.div
@@ -763,6 +948,7 @@ const Dashboard = () => {
         <div className="grid md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {aiTools.map((tool, index) => {
             const Icon = tool.icon;
+            const showQuest = !questCompleted && questToolName && tool.title === questToolName;
             return (
               <motion.div
                 key={tool.title}
@@ -776,6 +962,15 @@ const Dashboard = () => {
               >
                 <div className="h-full rounded-xl glass-morphism border border-white/10 hover:border-neon-blue/50 p-5 transition-all group relative overflow-hidden">
                   <div className={`absolute inset-0 bg-gradient-to-br ${tool.gradient} opacity-0 group-hover:opacity-10 transition-opacity duration-500`} />
+                  {showQuest && (
+                    <motion.span
+                      initial={{ opacity: 0, y: -4 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="absolute top-4 right-4 text-[10px] uppercase tracking-[0.3em] bg-emerald-500/20 text-emerald-200 border border-emerald-400/30 rounded-full px-3 py-1"
+                    >
+                      +{questReward} XP
+                    </motion.span>
+                  )}
                   
                   <div className="relative z-10">
                     <div className={`w-10 h-10 rounded-lg bg-gradient-to-br ${tool.gradient} flex items-center justify-center mb-3 shadow-lg group-hover:scale-110 transition-transform`}>

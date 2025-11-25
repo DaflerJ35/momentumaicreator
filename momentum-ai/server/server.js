@@ -15,19 +15,6 @@ const logger = require('./utils/logger');
 const admin = require('./firebaseAdmin');
 
 // Create logs directory if it doesn't exist (skip on serverless like Vercel)
-const isServerless = !!process.env.VERCEL || !!process.env.AWS_REGION;
-const logsDir = path.join(__dirname, 'logs');
-if (!isServerless) {
-  if (!fs.existsSync(logsDir)) {
-    fs.mkdirSync(logsDir, { recursive: true });
-  }
-}
-
-const app = express();
-const PORT = process.env.PORT || 3001;
-const isProduction = process.env.NODE_ENV === 'production';
-
-// Initialize Stripe only if secret key is provided
 let stripe;
 if (process.env.STRIPE_SECRET_KEY) {
   stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
@@ -61,7 +48,7 @@ const { corsOptions } = require('./middleware/security');
  */
 const parseOrigins = (envOrigins) => {
   const origins = [];
-  
+
   // Always include Vercel URLs if in Vercel environment
   if (process.env.VERCEL_URL) {
     origins.push(`https://${process.env.VERCEL_URL}`);
@@ -71,7 +58,7 @@ const parseOrigins = (envOrigins) => {
     origins.push('https://*.vercel.app');
     origins.push('https://*.vercel.app/*');
   }
-  
+
   if (envOrigins) {
     // Parse comma-separated origins and trim whitespace
     const parsed = envOrigins.split(',').map(origin => origin.trim());
@@ -80,7 +67,7 @@ const parseOrigins = (envOrigins) => {
     // Development defaults
     origins.push('http://localhost:5173', 'http://localhost:3000');
   }
-  
+
   // In production, avoid wildcards (except for Vercel)
   if (isProduction) {
     const hasWildcard = origins.some(origin => origin.includes('*') && !origin.includes('vercel.app'));
@@ -88,7 +75,7 @@ const parseOrigins = (envOrigins) => {
       logger.warn('Wildcard origins detected in production. This is a security risk.');
     }
   }
-  
+
   return origins;
 };
 
@@ -102,12 +89,12 @@ const enhancedCorsOptions = {
     if (!origin && !isProduction) {
       return callback(null, true);
     }
-    
+
     // Check exact match first
     if (allowedOrigins.includes(origin)) {
       return callback(null, true);
     }
-    
+
     // Check Vercel wildcard patterns
     if (process.env.VERCEL && origin) {
       try {
@@ -120,7 +107,7 @@ const enhancedCorsOptions = {
         // Invalid URL, continue to rejection
       }
     }
-    
+
     // Check if origin matches any pattern (for wildcards)
     const matchesPattern = allowedOrigins.some(pattern => {
       if (pattern.includes('*')) {
@@ -129,12 +116,12 @@ const enhancedCorsOptions = {
       }
       return false;
     });
-    
+
     if (matchesPattern) {
       return callback(null, true);
     }
-    
-    logger.warn(`CORS blocked request from origin: ${origin}`, { 
+
+    logger.warn(`CORS blocked request from origin: ${origin}`, {
       allowedOrigins: allowedOrigins.slice(0, 3) // Log first 3 for debugging
     });
     callback(new Error('Not allowed by CORS'));
@@ -185,19 +172,19 @@ app.post('/api/webhook', webhookLimiter, express.raw({ type: 'application/json' 
 
   const sig = req.headers['stripe-signature'];
   const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
-  
+
   if (!endpointSecret) {
     logger.error('STRIPE_WEBHOOK_SECRET not configured');
     return res.status(500).json({ error: 'Webhook configuration error' });
   }
-  
+
   let event;
 
   try {
     event = stripe.webhooks.constructEvent(req.body, sig, endpointSecret);
   } catch (err) {
     // Log full error details for debugging
-    logger.error('Webhook signature verification failed', { 
+    logger.error('Webhook signature verification failed', {
       error: err.message,
       stack: err.stack,
       ip: req.ip
@@ -209,9 +196,9 @@ app.post('/api/webhook', webhookLimiter, express.raw({ type: 'application/json' 
   // Idempotency check: skip if event was already processed
   const isProcessed = await idempotencyStore.isProcessed(event.id);
   if (isProcessed) {
-    logger.info('Webhook event already processed, skipping', { 
-      eventId: event.id, 
-      eventType: event.type 
+    logger.info('Webhook event already processed, skipping', {
+      eventId: event.id,
+      eventType: event.type
     });
     // Return 200 to acknowledge receipt (Stripe expects 2xx for idempotent handling)
     return res.status(200).json({ received: true, message: 'Event already processed' });
@@ -226,7 +213,7 @@ app.post('/api/webhook', webhookLimiter, express.raw({ type: 'application/json' 
       case 'checkout.session.completed':
         const session = event.data.object;
         // Update your database here
-        logger.info('Checkout session completed', { 
+        logger.info('Checkout session completed', {
           sessionId: session.id,
           customerEmail: session.customer_email,
           amount: session.amount_total
@@ -273,7 +260,7 @@ app.post('/api/webhook', webhookLimiter, express.raw({ type: 'application/json' 
         break;
       case 'invoice.payment_succeeded':
         const invoice = event.data.object;
-        logger.info('Payment succeeded', { 
+        logger.info('Payment succeeded', {
           invoiceId: invoice.id,
           customer: invoice.customer,
           amount: invoice.amount_paid
@@ -310,7 +297,7 @@ app.post('/api/webhook', webhookLimiter, express.raw({ type: 'application/json' 
         break;
       case 'customer.subscription.updated':
         const subscription = event.data.object;
-        logger.info('Subscription updated', { 
+        logger.info('Subscription updated', {
           subscriptionId: subscription.id,
           status: subscription.status,
           customer: subscription.customer
@@ -339,7 +326,7 @@ app.post('/api/webhook', webhookLimiter, express.raw({ type: 'application/json' 
         break;
       case 'customer.subscription.deleted':
         const deletedSubscription = event.data.object;
-        logger.info('Subscription deleted', { 
+        logger.info('Subscription deleted', {
           subscriptionId: deletedSubscription.id,
           customer: deletedSubscription.customer
         });
@@ -454,7 +441,7 @@ const getFreeProductAndPrice = async () => {
     // Check if free product already exists
     const products = await stripe.products.list({ limit: 100, active: true });
     let freeProduct = products.data.find(p => p.name === 'Free Momentum' || p.metadata?.plan === 'free');
-    
+
     if (!freeProduct) {
       // Create free product
       freeProduct = await stripe.products.create({
@@ -463,13 +450,13 @@ const getFreeProductAndPrice = async () => {
         metadata: { plan: 'free' }
       });
     }
-    
+
     freeProductId = freeProduct.id;
 
     // Check if $0 price exists for this product
     const prices = await stripe.prices.list({ product: freeProductId, active: true, limit: 100 });
     let freePrice = prices.data.find(p => p.unit_amount === 0 && p.recurring?.interval === 'month');
-    
+
     if (!freePrice) {
       // Create $0 price for free product
       freePrice = await stripe.prices.create({
@@ -482,9 +469,9 @@ const getFreeProductAndPrice = async () => {
         metadata: { plan: 'free' }
       });
     }
-    
+
     freePriceId = freePrice.id;
-    
+
     return { productId: freeProductId, priceId: freePriceId };
   } catch (error) {
     logger.error('Error getting/creating free product:', error);
@@ -536,66 +523,66 @@ app.post('/api/create-checkout-session', async (req, res) => {
   }
 
   const { plan, billingCycle, customerEmail, selectedAddOns = [], finalPrice } = req.body;
-  
+
   // REQUIRE AUTHENTICATION - Verify Firebase token
   try {
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return res.status(401).json({ 
+      return res.status(401).json({
         error: 'Authentication required',
         message: 'Please sign in to continue with your subscription'
       });
     }
-    
+
     const idToken = authHeader.split('Bearer ')[1];
     const admin = require('./firebaseAdmin');
-    
+
     // Check if Firebase Admin is initialized
     if (!admin.apps || admin.apps.length === 0) {
       logger.error('Firebase Admin not initialized');
-      return res.status(503).json({ 
+      return res.status(503).json({
         error: 'Authentication service unavailable',
         message: 'Please try again later'
       });
     }
-    
+
     const decodedToken = await admin.auth().verifyIdToken(idToken);
     req.user = {
       uid: decodedToken.uid,
       email: decodedToken.email,
       emailVerified: decodedToken.email_verified,
     };
-    
+
     // Use authenticated user's email if customerEmail not provided
     const emailToUse = customerEmail || decodedToken.email;
     if (!emailToUse) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         error: 'Email required',
         message: 'Email address is required for checkout'
       });
     }
   } catch (authError) {
     logger.error('Authentication error in checkout:', authError);
-    
+
     // Provide more specific error messages
     if (authError.code === 'auth/id-token-expired') {
-      return res.status(401).json({ 
+      return res.status(401).json({
         error: 'Session expired',
         message: 'Please sign in again to continue'
       });
     } else if (authError.code === 'auth/id-token-revoked') {
-      return res.status(401).json({ 
+      return res.status(401).json({
         error: 'Session revoked',
         message: 'Please sign in again to continue'
       });
     }
-    
-    return res.status(401).json({ 
+
+    return res.status(401).json({
       error: 'Authentication failed',
       message: 'Please sign in to continue with your subscription'
     });
   }
-  
+
   try {
     // SECURITY: Check trial eligibility before creating checkout session
     const trialValidation = require('./services/trialValidation');
@@ -619,7 +606,7 @@ app.post('/api/create-checkout-session', async (req, res) => {
       // For Business Plus, calculate the base price and add-on prices
       const addOnsTotal = selectedAddOns.reduce((sum, addOn) => sum + (addOn.price || 0), 0);
       const basePrice = finalPrice - addOnsTotal;
-      
+
       // Determine billing interval
       let interval = 'month';
       let intervalCount = 1;
@@ -629,7 +616,7 @@ app.post('/api/create-checkout-session', async (req, res) => {
         interval = 'year';
         intervalCount = 1;
       }
-      
+
       // Create a custom price for the total amount (base + add-ons)
       const lineItems = [{
         price_data: {
@@ -643,50 +630,50 @@ app.post('/api/create-checkout-session', async (req, res) => {
         },
         quantity: 1,
       }];
-      
-    const session = await stripe.checkout.sessions.create({
-      payment_method_types: ['card'],
-      line_items: lineItems,
-      mode: 'subscription',
-      automatic_tax: { enabled: true },
-      // REQUIRE PAYMENT METHOD for ALL plans (including free) to prevent abuse
-      payment_method_collection: 'always',
-      // For free plans, set trial period but still require card
-      // SECURITY: 3-day trial period (locked down to prevent abuse)
-      subscription_data: plan === 'free' ? {
-        trial_period_days: 3,
-        trial_settings: {
-          end_behavior: {
-            missing_payment_method: 'cancel'
+
+      const session = await stripe.checkout.sessions.create({
+        payment_method_types: ['card'],
+        line_items: lineItems,
+        mode: 'subscription',
+        automatic_tax: { enabled: true },
+        // REQUIRE PAYMENT METHOD for ALL plans (including free) to prevent abuse
+        payment_method_collection: 'always',
+        // For free plans, set trial period but still require card
+        // SECURITY: 3-day trial period (locked down to prevent abuse)
+        subscription_data: plan === 'free' ? {
+          trial_period_days: 3,
+          trial_settings: {
+            end_behavior: {
+              missing_payment_method: 'cancel'
+            }
           }
+        } : undefined,
+        success_url: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/dashboard?payment=success&session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/pricing?payment=cancelled`,
+        customer_email: customerEmail || req.user.email,
+        metadata: {
+          plan,
+          billing_cycle: billingCycle,
+          product_id: PRODUCT_IDS[plan] || '',
+          add_ons: JSON.stringify(selectedAddOns),
+          base_price: basePrice.toString(),
+          add_ons_total: addOnsTotal.toString(),
+          final_price: finalPrice.toString(),
+          user_id: req.user.uid,
         }
-      } : undefined,
-      success_url: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/dashboard?payment=success&session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/pricing?payment=cancelled`,
-      customer_email: customerEmail || req.user.email,
-      metadata: {
-        plan,
-        billing_cycle: billingCycle,
-        product_id: PRODUCT_IDS[plan] || '',
-        add_ons: JSON.stringify(selectedAddOns),
-        base_price: basePrice.toString(),
-        add_ons_total: addOnsTotal.toString(),
-        final_price: finalPrice.toString(),
-        user_id: req.user.uid,
-      }
-    });
+      });
 
       // Track account creation for IP
       trialValidation.addAccountToIPTracking(clientIP, req.user.uid);
       res.json({ sessionId: session.id });
       return;
     }
-    
+
     // Handle free plan - create $0 subscription with payment method required
     if (plan === 'free') {
       // Get or create free product and price
       const { priceId } = await getFreeProductAndPrice();
-      
+
       const session = await stripe.checkout.sessions.create({
         payment_method_types: ['card'],
         line_items: [{
@@ -722,17 +709,17 @@ app.post('/api/create-checkout-session', async (req, res) => {
 
     // Standard plan handling
     const priceId = PRICE_IDS[billingCycle]?.[plan];
-    
+
     // Handle missing yearly Pro plan gracefully
     if (!priceId || priceId === 'NO_YEARLY_PLAN_EXISTS_FOR_PRO') {
-      return res.status(400).json({ 
+      return res.status(400).json({
         error: 'Invalid plan or billing cycle',
-        message: plan === 'pro' && billingCycle === '12months' 
+        message: plan === 'pro' && billingCycle === '12months'
           ? 'Yearly Pro plan is not available. Please choose monthly or 6-month billing.'
           : 'The selected plan and billing cycle combination is not available.'
       });
     }
-    
+
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
       line_items: [
@@ -758,7 +745,7 @@ app.post('/api/create-checkout-session', async (req, res) => {
 
     // Track account creation for IP (for standard plans)
     trialValidation.addAccountToIPTracking(clientIP, req.user.uid);
-    
+
     res.json({ sessionId: session.id });
   } catch (error) {
     // Log full error details for debugging
@@ -773,6 +760,14 @@ app.post('/api/create-checkout-session', async (req, res) => {
 // Health check endpoint
 // Enhanced health check endpoint with diagnostics
 app.get('/api/health', (req, res) => {
+  const aiProvider = process.env.AI_PROVIDER || 'not set';
+  const geminiConfigured = !!process.env.GEMINI_API_KEY;
+  const openaiConfigured = !!process.env.OPENAI_API_KEY;
+  const ollamaConfigured = !!(process.env.OLLAMA_URL || process.env.OLLAMA_API_URL);
+  const flowithConfigured = !!(
+    (process.env.FLOWITH_API_KEY && (process.env.FLOWITH_API_URL || process.env.FLOWITH_BASE_URL))
+  );
+
   const health = {
     status: 'ok',
     timestamp: new Date().toISOString(),
@@ -784,8 +779,14 @@ app.get('/api/health', (req, res) => {
     },
     services: {
       firebase: !!admin.apps.length,
-      aiProvider: process.env.AI_PROVIDER || 'not set',
-      aiConfigured: !!(process.env.GEMINI_API_KEY || process.env.OPENAI_API_KEY || process.env.OLLAMA_API_URL),
+      aiProvider,
+      aiConfigured: geminiConfigured || openaiConfigured || ollamaConfigured || flowithConfigured,
+      providers: {
+        gemini: geminiConfigured,
+        ollama: ollamaConfigured,
+        openai: openaiConfigured,
+        flowith: flowithConfigured,
+      },
       stripe: !!stripe
     },
     memory: {
@@ -794,12 +795,9 @@ app.get('/api/health', (req, res) => {
       limit: process.env.VERCEL ? '3008 MB (Vercel)' : 'unlimited'
     }
   };
-  
+
   res.json(health);
 });
-
-// AI Service - Import AI service
-const aiService = require('./services/aiService');
 
 // Import route modules
 const teamRoutes = require('./routes/teams');
@@ -809,488 +807,13 @@ const blogRoutes = require('./routes/blog');
 const newsletterRoutes = require('./routes/newsletter');
 const analyticsRoutes = require('./routes/analytics');
 const referralRoutes = require('./routes/referrals');
+const aiRoutes = require('./routes/ai');
 
 // Import auth middleware
 const { verifyFirebaseToken } = require('./middleware/auth');
-// Import security rate limiter for AI
 const { aiLimiter } = require('./middleware/security');
 
-// Helper: choose auth/ratelimit for AI endpoints based on FREE_AI_MODE
-const aiPreMiddleware = (process.env.FREE_AI_MODE === 'true')
-  ? [aiLimiter] // Free mode: no auth, but strict rate limiting
-  : [verifyFirebaseToken]; // Default: require auth
-
-// AI API Endpoints
-// Generate content
-app.post('/api/ai/generate', ...aiPreMiddleware, async (req, res) => {
-  
-  const { prompt, model, temperature, maxTokens, provider } = req.body;
-  
-  try {
-    // Input validation and sanitization
-    if (!prompt || typeof prompt !== 'string') {
-      return res.status(400).json({ error: 'Prompt is required and must be a string' });
-    }
-    
-    // Sanitize prompt - remove null bytes and trim
-    const sanitizedPrompt = prompt.replace(/\0/g, '').trim();
-    
-    if (sanitizedPrompt.length === 0) {
-      return res.status(400).json({ error: 'Prompt cannot be empty' });
-    }
-    
-    // Sanitize prompt length
-    if (sanitizedPrompt.length > 10000) {
-      return res.status(400).json({ error: 'Prompt is too long. Maximum length is 10,000 characters.' });
-    }
-    
-    // Validate temperature if provided
-    if (temperature !== undefined) {
-      const temp = parseFloat(temperature);
-      if (isNaN(temp) || temp < 0 || temp > 2) {
-        return res.status(400).json({ error: 'Temperature must be a number between 0 and 2' });
-      }
-    }
-    
-    // Validate maxTokens if provided
-    if (maxTokens !== undefined) {
-      const tokens = parseInt(maxTokens);
-      if (isNaN(tokens) || tokens < 1 || tokens > 8000) {
-        return res.status(400).json({ error: 'Max tokens must be a number between 1 and 8000' });
-      }
-    }
-    
-    // Validate provider if provided
-    if (provider && typeof provider !== 'string') {
-      return res.status(400).json({ error: 'Invalid provider' });
-    }
-    
-    // Validate model if provided
-    if (model && typeof model !== 'string') {
-      return res.status(400).json({ error: 'Invalid model' });
-    }
-
-    // Setup abort/timeout to cancel upstream AI call if client disconnects or it runs too long
-    const abortController = new AbortController();
-    const ROUTE_TIMEOUT_MS = 60000; // 60s safety timeout
-    let timedOut = false;
-
-    const onClose = () => {
-      try { abortController.abort(); } catch (_) {}
-    };
-    req.on('close', onClose);
-    res.on('close', onClose);
-    const timeoutId = setTimeout(() => { timedOut = true; try { abortController.abort(); } catch (_) {} }, ROUTE_TIMEOUT_MS);
-
-    const cleanup = () => {
-      clearTimeout(timeoutId);
-      req.off('close', onClose);
-      res.off('close', onClose);
-    };
-
-    let response;
-    try {
-      response = await aiService.generateContent(sanitizedPrompt, {
-        model: model || undefined,
-        temperature: temperature !== undefined ? parseFloat(temperature) : undefined,
-        maxTokens: maxTokens !== undefined ? parseInt(maxTokens) : undefined,
-        provider: provider || undefined,
-        signal: abortController.signal,
-        timeoutMs: ROUTE_TIMEOUT_MS
-      });
-    } catch (err) {
-      cleanup();
-      if (err.name === 'AbortError') {
-        // If client closed or timeout, end quietly or report 499/408
-        if (!res.headersSent && !res.writableEnded) {
-          const code = timedOut ? 408 : 499; // 408 Request Timeout or 499 Client Closed Request (non-standard)
-          return res.status(code).json({ error: timedOut ? 'Request timed out' : 'Request cancelled' });
-        }
-        return;
-      }
-      throw err;
-    }
-
-    cleanup();
-    if (!res.writableEnded) {
-      res.json({ content: response });
-    }
-  } catch (error) {
-    // Log full error details for debugging (server-side only)
-    logger.error('AI generation error', { 
-      error: error.message, 
-      stack: error.stack,
-      userId: req.user?.uid 
-    });
-    // Don't expose technical error details to users
-    res.status(500).json({ error: 'Failed to generate content. Please try again.' });
-  }
-});
-
-// Generate structured content (JSON)
-app.post('/api/ai/generate-structured', ...aiPreMiddleware, async (req, res) => {
-  
-  const { prompt, schema, model, temperature, maxTokens, provider } = req.body;
-  
-  try {
-    // Input validation and sanitization
-    if (!prompt || typeof prompt !== 'string') {
-      return res.status(400).json({ error: 'Prompt is required and must be a string' });
-    }
-    
-    // Sanitize prompt
-    const sanitizedPrompt = prompt.replace(/\0/g, '').trim();
-    
-    if (sanitizedPrompt.length === 0) {
-      return res.status(400).json({ error: 'Prompt cannot be empty' });
-    }
-    
-    if (sanitizedPrompt.length > 10000) {
-      return res.status(400).json({ error: 'Prompt is too long. Maximum length is 10,000 characters.' });
-    }
-    
-    if (!schema || typeof schema !== 'object' || Array.isArray(schema)) {
-      return res.status(400).json({ error: 'Schema is required and must be a valid object' });
-    }
-    
-    // Validate schema is not too large (prevent DoS)
-    const schemaString = JSON.stringify(schema);
-    if (schemaString.length > 50000) {
-      return res.status(400).json({ error: 'Schema is too large. Maximum size is 50KB.' });
-    }
-    
-    // Validate temperature if provided
-    if (temperature !== undefined) {
-      const temp = parseFloat(temperature);
-      if (isNaN(temp) || temp < 0 || temp > 2) {
-        return res.status(400).json({ error: 'Temperature must be a number between 0 and 2' });
-      }
-    }
-    
-    // Validate maxTokens if provided
-    if (maxTokens !== undefined) {
-      const tokens = parseInt(maxTokens);
-      if (isNaN(tokens) || tokens < 1 || tokens > 8000) {
-        return res.status(400).json({ error: 'Max tokens must be a number between 1 and 8000' });
-      }
-    }
-
-    // Setup abort/timeout similar to non-structured route
-    const abortController = new AbortController();
-    const ROUTE_TIMEOUT_MS = 60000; // 60s safety timeout
-    let timedOut = false;
-
-    const onClose = () => {
-      try { abortController.abort(); } catch (_) {}
-    };
-    req.on('close', onClose);
-    res.on('close', onClose);
-    const timeoutId = setTimeout(() => { timedOut = true; try { abortController.abort(); } catch (_) {} }, ROUTE_TIMEOUT_MS);
-
-    const cleanup = () => {
-      clearTimeout(timeoutId);
-      req.off('close', onClose);
-      res.off('close', onClose);
-    };
-
-    let response;
-    try {
-      response = await aiService.generateStructuredContent(sanitizedPrompt, schema, {
-        model: model || undefined,
-        temperature: temperature !== undefined ? parseFloat(temperature) : undefined,
-        maxTokens: maxTokens !== undefined ? parseInt(maxTokens) : undefined,
-        provider: provider || undefined,
-        signal: abortController.signal,
-        timeoutMs: ROUTE_TIMEOUT_MS
-      });
-    } catch (err) {
-      cleanup();
-      if (err.name === 'AbortError') {
-        if (!res.headersSent && !res.writableEnded) {
-          const code = timedOut ? 408 : 499;
-          return res.status(code).json({ error: timedOut ? 'Request timed out' : 'Request cancelled' });
-        }
-        return;
-      }
-      throw err;
-    }
-
-    cleanup();
-    if (!res.writableEnded) {
-      res.json({ data: response });
-    }
-  } catch (error) {
-    // Log full error details for debugging (server-side only)
-    logger.error('AI structured generation error', { 
-      error: error.message, 
-      stack: error.stack,
-      userId: req.user?.uid 
-    });
-    // Don't expose technical error details to users
-    res.status(500).json({ error: 'Failed to generate structured content. Please try again.' });
-  }
-});
-
-// Stream content (Server-Sent Events) - REQUIRES AUTHENTICATION
-app.post('/api/ai/stream', ...aiPreMiddleware, async (req, res) => {
-  
-  const { prompt, model, temperature, maxTokens, provider, jsonMode } = req.body;
-  
-  try {
-    // Input validation and sanitization
-    if (!prompt || typeof prompt !== 'string') {
-      return res.status(400).json({ error: 'Prompt is required and must be a string' });
-    }
-    
-    // Sanitize prompt
-    const sanitizedPrompt = prompt.replace(/\0/g, '').trim();
-    
-    if (sanitizedPrompt.length === 0) {
-      return res.status(400).json({ error: 'Prompt cannot be empty' });
-    }
-    
-    // Sanitize prompt length
-    if (sanitizedPrompt.length > 10000) {
-      return res.status(400).json({ error: 'Prompt is too long. Maximum length is 10,000 characters.' });
-    }
-    
-    // Validate temperature if provided
-    if (temperature !== undefined) {
-      const temp = parseFloat(temperature);
-      if (isNaN(temp) || temp < 0 || temp > 2) {
-        return res.status(400).json({ error: 'Temperature must be a number between 0 and 2' });
-      }
-    }
-    
-    // Validate maxTokens if provided
-    if (maxTokens !== undefined) {
-      const tokens = parseInt(maxTokens);
-      if (isNaN(tokens) || tokens < 1 || tokens > 8000) {
-        return res.status(400).json({ error: 'Max tokens must be a number between 1 and 8000' });
-      }
-    }
-    
-    // Validate provider if provided
-    if (provider && typeof provider !== 'string') {
-      return res.status(400).json({ error: 'Invalid provider' });
-    }
-    
-    // Validate model if provided
-    if (model && typeof model !== 'string') {
-      return res.status(400).json({ error: 'Invalid model' });
-    }
-
-    // Set up SSE headers for Vercel serverless compatibility
-    res.setHeader('Content-Type', 'text/event-stream');
-    res.setHeader('Cache-Control', 'no-cache, no-transform');
-    res.setHeader('Connection', 'keep-alive');
-    res.setHeader('X-Accel-Buffering', 'no'); // Disable nginx buffering
-    res.setHeader('Transfer-Encoding', 'chunked');
-    
-    // Flush headers immediately (critical for Vercel)
-    res.flushHeaders();
-
-    // Track client disconnection
-    let clientClosed = false;
-    res.on('close', () => {
-      clientClosed = true;
-    });
-
-    // Create AbortController for upstream cancellation
-    const abortController = new AbortController();
-
-    // Heartbeat interval - send comment line every 15 seconds to keep connection alive
-    // Vercel serverless functions need more frequent heartbeats
-    const HEARTBEAT_INTERVAL = 15000; // 15 seconds (reduced for Vercel)
-    const heartbeatInterval = setInterval(() => {
-      if (clientClosed) {
-        clearInterval(heartbeatInterval);
-        return;
-      }
-      try {
-        // Send SSE comment line (keeps connection alive, ignored by EventSource)
-        res.write(': heartbeat\n\n');
-        // Force flush in Vercel environment
-        if (res.flush && typeof res.flush === 'function') {
-          res.flush();
-        }
-      } catch (e) {
-        // Connection closed, stop heartbeat
-        clearInterval(heartbeatInterval);
-        clientClosed = true;
-      }
-    }, HEARTBEAT_INTERVAL);
-
-    // Maximum stream duration - abort after 5 minutes to prevent indefinite connections
-    const MAX_STREAM_DURATION = 300000; // 5 minutes
-    const maxDurationTimeout = setTimeout(() => {
-      if (!clientClosed) {
-        logger.warn('AI stream exceeded maximum duration, aborting', { duration: MAX_STREAM_DURATION });
-        abortController.abort();
-        clientClosed = true;
-        clearInterval(heartbeatInterval);
-        res.write(`data: ${JSON.stringify({ error: 'Stream timeout: maximum duration exceeded', done: true })}\n\n`);
-        res.end();
-      }
-    }, MAX_STREAM_DURATION);
-
-    // Cleanup function to clear all timers
-    const cleanup = () => {
-      clearInterval(heartbeatInterval);
-      clearTimeout(maxDurationTimeout);
-    };
-
-    try {
-      for await (const chunk of aiService.generateStreamingContent(sanitizedPrompt, {
-        model: model || undefined,
-        temperature: temperature !== undefined ? parseFloat(temperature) : undefined,
-        maxTokens: maxTokens !== undefined ? parseInt(maxTokens) : undefined,
-        provider: provider || undefined,
-        jsonMode: jsonMode || false,
-        signal: abortController.signal
-      })) {
-        // Check if client disconnected before writing
-        if (clientClosed) {
-          abortController.abort();
-          cleanup();
-          return;
-        }
-        
-        try {
-          res.write(`data: ${JSON.stringify({ chunk, done: false })}\n\n`);
-          // Force flush after each chunk in Vercel environment
-          if (res.flush && typeof res.flush === 'function') {
-            res.flush();
-          }
-        } catch (writeError) {
-          // Client disconnected during write
-          logger.warn('Client disconnected during stream write', { error: writeError.message });
-          abortController.abort();
-          cleanup();
-          return;
-        }
-      }
-      
-      // Check again before sending final message
-      if (clientClosed) {
-        cleanup();
-        return;
-      }
-      
-      // Clear timers on successful completion
-      cleanup();
-      res.write(`data: ${JSON.stringify({ chunk: '', done: true })}\n\n`);
-      res.end();
-    } catch (error) {
-      // Clear timers on error
-      cleanup();
-      
-      // Don't write error if client already disconnected
-      if (clientClosed) {
-        return;
-      }
-      
-      // Don't expose technical error details in SSE stream
-      res.write(`data: ${JSON.stringify({ error: 'Failed to stream content', done: true })}\n\n`);
-      res.end();
-    }
-  } catch (error) {
-    // Log full error details for debugging (server-side only)
-    logger.error('AI streaming error', { 
-      error: error.message, 
-      stack: error.stack,
-      userId: req.user?.uid 
-    });
-    // Don't expose technical error details to users
-    if (!res.headersSent) {
-      res.status(500).json({ error: 'Failed to stream content. Please try again.' });
-    }
-  }
-});
-
-// Analyze image - REQUIRES AUTHENTICATION
-app.post('/api/ai/analyze-image', ...aiPreMiddleware, async (req, res) => {
-  
-  const { imageData, prompt } = req.body;
-  
-  try {
-    // Input validation and sanitization
-    if (!imageData || typeof imageData !== 'string') {
-      return res.status(400).json({ error: 'Image data is required and must be a valid string' });
-    }
-    
-    if (!prompt || typeof prompt !== 'string') {
-      return res.status(400).json({ error: 'Prompt is required and must be a string' });
-    }
-    
-    // Sanitize prompt
-    const sanitizedPrompt = prompt.replace(/\0/g, '').trim();
-    
-    if (sanitizedPrompt.length === 0) {
-      return res.status(400).json({ error: 'Prompt cannot be empty' });
-    }
-    
-    // Sanitize prompt length
-    if (sanitizedPrompt.length > 1000) {
-      return res.status(400).json({ error: 'Prompt is too long. Maximum length is 1,000 characters.' });
-    }
-    
-    // Validate image data format (basic check)
-    if (!imageData.startsWith('data:image/') && !imageData.startsWith('http://') && !imageData.startsWith('https://')) {
-      return res.status(400).json({ error: 'Invalid image data format' });
-    }
-    
-    // Validate URL if it's a URL (prevent SSRF)
-    if (imageData.startsWith('http://') || imageData.startsWith('https://')) {
-      try {
-        const url = new URL(imageData);
-        // Block private IPs and localhost
-        if (url.hostname === 'localhost' || url.hostname === '127.0.0.1' || url.hostname.startsWith('192.168.') || url.hostname.startsWith('10.') || url.hostname.startsWith('172.')) {
-          return res.status(400).json({ error: 'Invalid image URL' });
-        }
-      } catch (urlError) {
-        return res.status(400).json({ error: 'Invalid image URL format' });
-      }
-    }
-
-    const response = await aiService.analyzeImage(imageData, sanitizedPrompt);
-    res.json({ analysis: response });
-  } catch (error) {
-    // Log full error details for debugging (server-side only)
-    logger.error('AI image analysis error', { 
-      error: error.message, 
-      stack: error.stack,
-      userId: req.user?.uid 
-    });
-    // Don't expose technical error details to users
-    res.status(500).json({ error: 'Failed to analyze image. Please try again.' });
-  }
-});
-
-// Get available models - PUBLIC endpoint (no auth required)
-app.get('/api/ai/models', (req, res) => {
-  try {
-    const models = aiService.getAvailableModels();
-    const providerMap = aiService.constructor.getProviderModelMap();
-    const providerInfo = providerMap[aiService.provider] || {};
-    
-    res.json({ 
-      models, 
-      provider: aiService.provider,
-      defaultModel: aiService.defaultModel,
-      supportsStreaming: providerInfo.supportsStreaming || false,
-      supportsImageAnalysis: providerInfo.supportsImageAnalysis || false,
-      providerMap: providerMap // Include full provider map for client reference
-    });
-  } catch (error) {
-    // Log full error details for debugging
-    logger.error('Error getting models', { error: error.message, stack: error.stack });
-    // Don't expose technical error details to users
-    res.status(500).json({ error: 'Failed to get available models. Please try again.' });
-  }
-});
-
-// Register team and multimedia routes
+// Register routes
 app.use('/api/teams', teamRoutes);
 app.use('/api/multimedia', multimediaRoutes);
 app.use('/api/platforms', platformRoutes);
@@ -1298,6 +821,7 @@ app.use('/api/blog', blogRoutes);
 app.use('/api/newsletter', newsletterRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/referrals', referralRoutes);
+app.use('/api/ai', aiRoutes);
 
 // Marketplace checkout endpoint
 app.post('/api/marketplace/checkout', async (req, res) => {
@@ -1307,7 +831,7 @@ app.post('/api/marketplace/checkout', async (req, res) => {
   }
 
   const { itemId, itemName, price, customerEmail } = req.body;
-  
+
   try {
     // Verify Firebase token
     const authHeader = req.headers.authorization;
@@ -1326,7 +850,7 @@ app.post('/api/marketplace/checkout', async (req, res) => {
     }
 
     if (!itemId || !itemName || !price || !customerEmail) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         error: 'Missing required fields',
         message: 'itemId, itemName, price, and customerEmail are required'
       });
@@ -1385,7 +909,7 @@ function escapeHtml(text) {
 // Contact form endpoint with stricter rate limiting and input sanitization
 app.post('/api/contact', contactLimiter, async (req, res) => {
   const { name, email, company, phone, subject, message, _honeypot } = req.body;
-  
+
   try {
     // Honeypot check - if filled, it's likely a bot
     if (_honeypot) {
@@ -1396,7 +920,7 @@ app.post('/api/contact', contactLimiter, async (req, res) => {
 
     // Validation: Required fields
     if (!name || !email || !subject || !message) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         error: 'Missing required fields',
         message: 'Name, email, subject, and message are required'
       });
@@ -1412,7 +936,7 @@ app.post('/api/contact', contactLimiter, async (req, res) => {
 
     // Validate: Name cannot be empty after sanitization
     if (sanitizedName.length === 0) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         error: 'Invalid name',
         message: 'Please provide a valid name'
       });
@@ -1421,7 +945,7 @@ app.post('/api/contact', contactLimiter, async (req, res) => {
     // Validation: Email format
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(sanitizedEmail)) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         error: 'Invalid email format',
         message: 'Please provide a valid email address'
       });
@@ -1429,7 +953,7 @@ app.post('/api/contact', contactLimiter, async (req, res) => {
 
     // Validation: Message cannot be empty after sanitization
     if (sanitizedMessage.length === 0) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         error: 'Invalid message',
         message: 'Message cannot be empty'
       });
@@ -1438,7 +962,7 @@ app.post('/api/contact', contactLimiter, async (req, res) => {
     // Validation: Subject must be from allowed list
     const allowedSubjects = ['general', 'sales', 'enterprise', 'support', 'partnership', 'other'];
     if (!allowedSubjects.includes(sanitizedSubject)) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         error: 'Invalid subject',
         message: 'Please select a valid subject'
       });
@@ -1457,7 +981,7 @@ app.post('/api/contact', contactLimiter, async (req, res) => {
 
     // Send email if mail provider is configured
     const nodemailer = require('nodemailer');
-    
+
     if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
       const transporter = nodemailer.createTransport({
         host: process.env.SMTP_HOST,
@@ -1502,17 +1026,17 @@ ${sanitizedMessage}
       logger.warn('SMTP not configured, email not sent. Contact form data logged only.');
     }
 
-    res.json({ 
-      success: true, 
-      message: 'Message sent successfully. We will get back to you soon!' 
+    res.json({
+      success: true,
+      message: 'Message sent successfully. We will get back to you soon!'
     });
 
   } catch (error) {
-    logger.error('Error processing contact form', { 
-      error: error.message, 
-      stack: error.stack 
+    logger.error('Error processing contact form', {
+      error: error.message,
+      stack: error.stack
     });
-    res.status(500).json({ 
+    res.status(500).json({
       error: 'Failed to send message',
       details: 'An error occurred while processing your request. Please try again later.'
     });
@@ -1522,7 +1046,7 @@ ${sanitizedMessage}
 // Serve static assets in production
 if (process.env.NODE_ENV === 'production') {
   app.use(express.static(path.join(__dirname, '../dist')));
-  
+
   app.get('*', (req, res) => {
     res.sendFile(path.join(__dirname, '../dist', 'index.html'));
   });
@@ -1531,15 +1055,12 @@ if (process.env.NODE_ENV === 'production') {
 // Graceful shutdown handler
 const gracefulShutdown = async (signal) => {
   logger.info(`Received ${signal}, shutting down gracefully...`);
-  
+
   try {
-    // Close idempotency store connections
-    await idempotencyStore.close();
-    logger.info('Idempotency store closed');
   } catch (error) {
     logger.error('Error closing idempotency store', { error: error.message });
   }
-  
+
   process.exit(0);
 };
 
@@ -1549,25 +1070,22 @@ process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 // Export the app for testing
 module.exports = app;
 
-// Only start the server if this file is run directly (not imported)
-if (require.main === module) {
-  app.listen(PORT, () => {
-    logger.info(`Server running on port ${PORT}`, { 
-      env: process.env.NODE_ENV,
-      port: PORT 
-    });
-    
-    // Start scheduler service
-    try {
-      const schedulerService = require('./services/schedulerService');
-      if (!isServerless) {
-        schedulerService.startScheduler();
-        logger.info('Scheduler service started');
-      } else {
-        logger.info('Serverless environment detected; interval scheduler not started');
-      }
-    } catch (error) {
-      logger.error(`Failed to start scheduler: ${error.message}`);
+if (process.env.NODE_ENV !== 'production' || !process.env.VERCEL) {
+  const server = app.listen(PORT, () => {
+    logger.info(`Server running in ${process.env.NODE_ENV} mode on port ${PORT}`);
+
+    // Start scheduler only in non-serverless environments
+    // In Vercel, use Cron Jobs to hit /api/scheduler/run
+    if (!process.env.VERCEL) {
+      const { startScheduler } = require('./services/schedulerService');
+      startScheduler();
     }
+  });
+
+  // Handle unhandled promise rejections
+  process.on('unhandledRejection', (err, promise) => {
+    logger.error(`Error: ${err.message}`);
+    // Close server & exit process
+    // server.close(() => process.exit(1));
   });
 }

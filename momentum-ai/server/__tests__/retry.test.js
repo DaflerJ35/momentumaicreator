@@ -1,3 +1,7 @@
+/**
+ * @jest-environment node
+ */
+
 const { retryWithBackoff, isRetryableError, generateIdempotencyKey } = require('../utils/retry');
 
 describe('Retry Utilities', () => {
@@ -73,8 +77,9 @@ describe('Retry Utilities', () => {
   });
 
   describe('generateIdempotencyKey', () => {
-    it('should generate a unique key', () => {
+    it('should generate a unique key', async () => {
       const key1 = generateIdempotencyKey('platform', 'user', 'content');
+      await new Promise((resolve) => setTimeout(resolve, 5));
       const key2 = generateIdempotencyKey('platform', 'user', 'content');
       
       expect(key1).toBeDefined();
